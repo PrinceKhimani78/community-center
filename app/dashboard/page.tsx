@@ -1,8 +1,11 @@
 import { cookies } from "next/headers";
 import Link from "next/link";
 import { ShieldCheck } from "lucide-react";
+import { Suspense } from "react";
 
-export default async function DashboardPage() {
+export const instant = false;
+
+async function UserRole() {
   const cookieStore = await cookies();
   const session = cookieStore.get("valibhoy_session");
   let role = "Authorized User";
@@ -15,6 +18,10 @@ export default async function DashboardPage() {
     }
   }
 
+  return <span className="font-semibold text-navy uppercase">{role}</span>;
+}
+
+export default function DashboardPage() {
   return (
     <main className="min-h-screen bg-cream flex flex-col items-center justify-center p-6 text-center">
       <div className="bg-white border border-card-border shadow-lg rounded-2xl p-8 max-w-md w-full flex flex-col items-center gap-4">
@@ -23,7 +30,11 @@ export default async function DashboardPage() {
         </div>
         <h1 className="text-2xl font-bold text-navy">Dashboard – coming soon</h1>
         <p className="text-muted text-sm">
-          You are authenticated as <span className="font-semibold text-navy uppercase">{role}</span>.
+          You are authenticated as{" "}
+          <Suspense fallback={<span className="font-semibold text-navy uppercase">User</span>}>
+            <UserRole />
+          </Suspense>
+          .
         </p>
         <Link
           href="/login"
@@ -35,3 +46,4 @@ export default async function DashboardPage() {
     </main>
   );
 }
+
