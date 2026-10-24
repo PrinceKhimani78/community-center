@@ -1,0 +1,53 @@
+@import "tailwindcss";
+
+@theme {
+  --color-navy: #0B2A5B;
+  --color-gold: #C9971C;
+  --color-light-gold: #E2B544;
+  --color-pale-gold: #F4CF6A;
+  --color-deep-gold: #8A6510;
+  --color-cream: #FBF6EC;
+  --color-ink: #14213D;
+  --color-muted: #5B6474;
+  --color-field-border: #E5D9BF;
+  --color-card-border: #EFE4CC;
+  --color-success: #15803D;
+  --color-error: #C62828;
+
+  --font-poppins: var(--font-poppins), 'Poppins', system-ui, -apple-system, sans-serif;
+  --font-gujarati: var(--font-gujarati), 'Noto Sans Gujarati', 'Gujarati Sangam MN', 'Shruti', sans-serif;
+}
+
+:root {
+  --navy: #0B2A5B;
+  --gold: #C9971C;
+  --light-gold: #E2B544;
+  --pale-gold: #F4CF6A;
+  --deep-gold: #8A6510;
+  --cream: #FBF6EC;
+  --ink: #14213D;
+  --muted: #5B6474;
+  --field-border: #E5D9BF;
+  --card-border: #EFE4CC;
+  --success: #15803D;
+  --error: #C62828;
+}
+
+body {
+  background-color: #FBF6EC;
+  color: #14213D;
+  font-family: var(--font-poppins), 'Poppins', system-ui, -apple-system, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+[lang="gu"] {
+  font-family: var(--font-gujarati), 'Noto Sans Gujarati', 'Gujarati Sangam MN', 'Shruti', sans-serif;
+}
+
+/* Custom focus ring */
+.focus-ring-gold:focus-visible,
+.focus-ring-gold:focus {
+  outline: none;
+  box-shadow: 0 0 0 2px #E2B544;
+}
