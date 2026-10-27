@@ -18,63 +18,63 @@ const PILL_CHIPS = [
 
 export default function LoginPage() {
   return (
-    <div className="w-full min-h-screen bg-cream overflow-x-hidden font-sans">
+    <div className="w-full min-h-screen lg:h-screen lg:overflow-hidden bg-cream overflow-x-hidden font-sans">
       {/* =========================================================================
-          DESKTOP LAYOUT (>= 1024px): Two Columns, Full Viewport Height
+          DESKTOP LAYOUT (>= 1024px): Two Columns (50/50), Full Viewport Height
           ========================================================================= */}
-      <div className="hidden lg:flex min-h-screen w-full">
-        {/* LEFT PANEL (~55% width): Navy background, 6px light-gold right border */}
+      <div className="hidden lg:flex h-full w-full overflow-hidden">
+        {/* LEFT PANEL (50% width): Navy background, 6px light-gold right border */}
         <section
           aria-label="Community Centre Information"
-          className="w-[55%] min-h-screen bg-navy border-r-[6px] border-light-gold flex flex-col items-center justify-center p-10 xl:p-14 text-center select-none"
+          className="w-1/2 h-full bg-navy border-r-[6px] border-light-gold flex flex-col items-center justify-center p-6 xl:p-10 2xl:p-14 text-center select-none overflow-y-auto no-scrollbar"
         >
-          {/* 1. Logo 220x220, round, soft shadow (0 12px 40px rgba(0,0,0,0.3)), NO border or ring */}
-          <div className="relative w-[220px] h-[220px] shrink-0">
+          {/* 1. Logo, round, soft shadow, responsive dimensions */}
+          <div className="relative w-[150px] h-[150px] xl:w-[185px] xl:h-[185px] 2xl:w-[210px] 2xl:h-[210px] shrink-0">
             <Image
               src="/logo.png"
               alt="Haji Mohamed Yunus Valibhoy Community Centre logo"
-              width={220}
-              height={220}
+              fill
+              sizes="(max-width: 1280px) 150px, (max-width: 1536px) 185px, 210px"
               className="rounded-full object-contain shadow-[0_12px_40px_rgba(0,0,0,0.3)] select-none"
               priority
             />
           </div>
 
-          {/* 2. Heading, white, 34px bold, two lines */}
-          <h1 className="text-white text-[34px] font-bold leading-[1.25] mt-6 tracking-tight font-poppins">
+          {/* 2. Heading, white, bold, two lines */}
+          <h1 className="text-white text-[24px] xl:text-[28px] 2xl:text-[32px] font-bold leading-[1.25] mt-4 xl:mt-5 tracking-tight font-poppins">
             <span>Haji Mohamed Yunus Valibhoy</span>
             <br />
             <span>Community Centre</span>
           </h1>
 
-          {/* 3. Ornament divider 280px wide: gold line - small rotated gold diamond (10px) - gold line */}
-          <div className="flex items-center justify-center w-[280px] my-5" aria-hidden="true">
+          {/* 3. Ornament divider: gold line - small rotated gold diamond (10px) - gold line */}
+          <div className="flex items-center justify-center w-[220px] xl:w-[260px] my-3 xl:my-4" aria-hidden="true">
             <div className="flex-1 h-[1.5px] bg-gold" />
-            <div className="w-[10px] h-[10px] bg-gold rotate-45 mx-3 shrink-0" />
+            <div className="w-[9px] h-[9px] bg-gold rotate-45 mx-3 shrink-0" />
             <div className="flex-1 h-[1.5px] bg-gold" />
           </div>
 
-          {/* 4. Gujarati name, pale-gold, 26px bold, two lines */}
+          {/* 4. Gujarati name, pale-gold, bold, two lines */}
           <h2
             lang="gu"
-            className="text-pale-gold text-[26px] font-bold leading-[1.35] tracking-wide font-gujarati"
+            className="text-pale-gold text-[19px] xl:text-[22px] 2xl:text-[25px] font-bold leading-[1.3] tracking-wide font-gujarati"
           >
             <span>હાજી મોહમ્મદ યુનુસ વલીભોય</span>
             <br />
             <span>કોમ્યુનિટી સેન્ટર</span>
           </h2>
 
-          {/* 5. Subtitle in #D6DEEB, 15px */}
-          <p className="text-[#D6DEEB] text-[15px] font-normal mt-3 tracking-wide">
+          {/* 5. Subtitle in #D6DEEB */}
+          <p className="text-[#D6DEEB] text-[13px] xl:text-[14.5px] font-normal mt-2 xl:mt-2.5 tracking-wide">
             Serving Humanity · Dhari, Gujarat, India
           </p>
 
-          {/* 6. Four pill chips (13px, pale-gold text, 1px border rgba(226,181,68,0.5), fully rounded) */}
-          <div className="flex flex-wrap items-center justify-center gap-2.5 max-w-[480px] mt-8">
+          {/* 6. Four pill chips */}
+          <div className="flex flex-wrap items-center justify-center gap-2 xl:gap-2.5 max-w-[460px] mt-4 xl:mt-6">
             {PILL_CHIPS.map((chip) => (
               <span
                 key={chip}
-                className="px-4 py-1.5 text-[13px] font-medium text-pale-gold border border-[rgba(226,181,68,0.5)] bg-[rgba(244,207,106,0.05)] rounded-full transition-all duration-200 hover:bg-[rgba(244,207,106,0.12)] cursor-default select-none"
+                className="px-3.5 py-1 xl:px-4 xl:py-1.5 text-[12px] xl:text-[13px] font-medium text-pale-gold border border-[rgba(226,181,68,0.5)] bg-[rgba(244,207,106,0.05)] rounded-full transition-all duration-200 hover:bg-[rgba(244,207,106,0.12)] cursor-default select-none"
               >
                 {chip}
               </span>
@@ -82,10 +82,10 @@ export default function LoginPage() {
           </div>
         </section>
 
-        {/* RIGHT PANEL (~45% width): Cream background, centered sign-in card */}
+        {/* RIGHT PANEL (50% width): Cream background, centered sign-in card */}
         <section
           aria-label="Sign In"
-          className="w-[45%] min-h-screen bg-cream flex items-center justify-center p-8 xl:p-12"
+          className="w-1/2 h-full bg-cream flex items-center justify-center p-6 xl:p-10 overflow-y-auto no-scrollbar"
         >
           <LoginForm hideCardBorderOnMobile={false} />
         </section>

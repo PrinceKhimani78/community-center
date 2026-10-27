@@ -51,3 +51,13 @@ body {
   outline: none;
   box-shadow: 0 0 0 2px #E2B544;
 }
+
+/* Hide scrollbars */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+

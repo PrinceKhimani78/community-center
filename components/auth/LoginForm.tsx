@@ -92,12 +92,12 @@ export default function LoginForm({ className = "", hideCardBorderOnMobile = tru
       <div
         className={`w-full max-w-[420px] mx-auto ${
           hideCardBorderOnMobile
-            ? "lg:bg-white lg:border lg:border-card-border lg:rounded-[20px] lg:p-[36px] lg:shadow-[0_10px_30px_rgba(11,42,91,0.08)] p-0"
-            : "bg-white border border-card-border rounded-[20px] p-[36px] shadow-[0_10px_30px_rgba(11,42,91,0.08)]"
+            ? "lg:bg-white lg:border lg:border-card-border lg:rounded-[20px] lg:p-7 xl:p-[34px] lg:shadow-[0_10px_30px_rgba(11,42,91,0.08)] p-0"
+            : "bg-white border border-card-border rounded-[20px] p-7 xl:p-[34px] shadow-[0_10px_30px_rgba(11,42,91,0.08)]"
         } ${className}`}
         suppressHydrationWarning
       >
-        <div className="flex flex-col gap-[18px]" suppressHydrationWarning>
+        <div className="flex flex-col gap-3.5 xl:gap-[18px]" suppressHydrationWarning>
           <div>
             <h2 className="text-[26px] font-bold text-navy leading-tight tracking-tight">Sign in</h2>
             <p className="text-muted text-[14px] mt-1 font-normal leading-normal">
@@ -147,12 +147,12 @@ export default function LoginForm({ className = "", hideCardBorderOnMobile = tru
     <div
       className={`w-full max-w-[420px] mx-auto ${
         hideCardBorderOnMobile
-          ? "lg:bg-white lg:border lg:border-card-border lg:rounded-[20px] lg:p-[36px] lg:shadow-[0_10px_30px_rgba(11,42,91,0.08)] p-0"
-          : "bg-white border border-card-border rounded-[20px] p-[36px] shadow-[0_10px_30px_rgba(11,42,91,0.08)]"
+          ? "lg:bg-white lg:border lg:border-card-border lg:rounded-[20px] lg:p-7 xl:p-[34px] lg:shadow-[0_10px_30px_rgba(11,42,91,0.08)] p-0"
+          : "bg-white border border-card-border rounded-[20px] p-7 xl:p-[34px] shadow-[0_10px_30px_rgba(11,42,91,0.08)]"
       } ${className}`}
       suppressHydrationWarning
     >
-      <form onSubmit={handleSubmit} noValidate suppressHydrationWarning className="flex flex-col gap-[18px]">
+      <form onSubmit={handleSubmit} noValidate suppressHydrationWarning className="flex flex-col gap-3.5 xl:gap-[18px]">
         {/* Header */}
         <div>
           <h2 className="text-[26px] font-bold text-navy leading-tight tracking-tight">Sign in</h2>
