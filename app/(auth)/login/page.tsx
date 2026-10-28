@@ -1,7 +1,6 @@
 import React from "react";
 import type { Metadata } from "next";
 import Image from "next/image";
-import { ShieldCheck } from "lucide-react";
 import LoginForm from "@/components/auth/LoginForm";
 
 export const metadata: Metadata = {
@@ -9,178 +8,422 @@ export const metadata: Metadata = {
   description: "Community Centre Management System - Dhari, Gujarat, India",
 };
 
-const PILL_CHIPS = [
-  "Bookings & Calendar",
-  "Payments & Deposits",
-  "Maintenance & Inspection",
-  "Attendance & Reports",
-];
-
 export default function LoginPage() {
   return (
-    <div className="w-full min-h-screen lg:h-screen lg:overflow-hidden bg-cream overflow-x-hidden font-sans">
+    <div
+      style={{ backgroundColor: "#FAF6EF" }}
+      className="relative w-full min-h-screen overflow-x-hidden font-sans select-none"
+    >
       {/* =========================================================================
-          DESKTOP LAYOUT (>= 1024px): Two Columns (50/50), Full Viewport Height
+          DESKTOP VIEW (>= 1024px): 50/50 Dual Canvas with Flowing Gold Wave
           ========================================================================= */}
-      <div className="hidden lg:flex h-full w-full overflow-hidden">
-        {/* LEFT PANEL (50% width): Navy background, 6px light-gold right border */}
+      <div className="hidden lg:flex relative w-full h-screen overflow-hidden">
+        {/* Background SVG Layer */}
+        <div className="absolute inset-0 w-full h-full pointer-events-none z-0">
+          <svg
+            viewBox="0 0 1440 900"
+            fill="none"
+            xmlns="http://www.w3.org/2000/svg"
+            className="w-full h-full object-cover"
+            preserveAspectRatio="none"
+          >
+            <defs>
+              {/* Deep Royal Navy Gradient */}
+              <linearGradient id="navyBgGradient" x1="0%" y1="0%" x2="60%" y2="100%">
+                <stop offset="0%" stopColor="#041738" />
+                <stop offset="35%" stopColor="#08255B" />
+                <stop offset="70%" stopColor="#0B2A5B" />
+                <stop offset="100%" stopColor="#021028" />
+              </linearGradient>
+
+              {/* Metallic Gold Ribbon Gradient */}
+              <linearGradient id="goldRibbonGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" stopColor="#D4AF37" />
+                <stop offset="20%" stopColor="#F7E6A9" />
+                <stop offset="45%" stopColor="#E2B544" />
+                <stop offset="70%" stopColor="#FFECA6" />
+                <stop offset="90%" stopColor="#C9971C" />
+                <stop offset="100%" stopColor="#966B12" />
+              </linearGradient>
+
+              {/* Bright Center Highlight for Gold Ribbon */}
+              <linearGradient id="goldCenterHighlight" x1="0%" y1="0%" x2="0%" y2="100%">
+                <stop offset="0%" stopColor="#FFF7D6" />
+                <stop offset="50%" stopColor="#FFFFFF" />
+                <stop offset="100%" stopColor="#FFEBB0" />
+              </linearGradient>
+
+              {/* Soft Cream Right Side Gradient */}
+              <linearGradient id="creamBgGradient" x1="50%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" stopColor="#FCF9F2" />
+                <stop offset="50%" stopColor="#FAF5EB" />
+                <stop offset="100%" stopColor="#F4EDE0" />
+              </linearGradient>
+
+              {/* Bottom-left Silky Navy Sheen */}
+              <linearGradient id="bottomLeftSheen" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" stopColor="#14468E" stopOpacity="0.4" />
+                <stop offset="60%" stopColor="#0A2D6C" stopOpacity="0.2" />
+                <stop offset="100%" stopColor="#03122E" stopOpacity="0" />
+              </linearGradient>
+
+              {/* Top-right Soft Gold Flares */}
+              <linearGradient id="topRightFlare" x1="100%" y1="0%" x2="50%" y2="50%">
+                <stop offset="0%" stopColor="#EAD8B5" stopOpacity="0.5" />
+                <stop offset="40%" stopColor="#F5EBD7" stopOpacity="0.25" />
+                <stop offset="100%" stopColor="#FAF6EF" stopOpacity="0" />
+              </linearGradient>
+
+              {/* Drop Shadows */}
+              <filter id="ribbonShadow" x="-10%" y="-10%" width="130%" height="130%">
+                <feDropShadow dx="8" dy="2" stdDeviation="10" floodColor="#805B0D" floodOpacity="0.25" />
+              </filter>
+              <filter id="navyWaveShadow" x="-10%" y="-10%" width="130%" height="130%">
+                <feDropShadow dx="12" dy="0" stdDeviation="16" floodColor="#000000" floodOpacity="0.25" />
+              </filter>
+            </defs>
+
+            {/* 1. Base Cream Canvas */}
+            <rect width="1440" height="900" fill="url(#creamBgGradient)" />
+
+            {/* 2. Top-right Subtle Golden Fluid Waves */}
+            <path
+              d="M1020,0 C1160,60 1320,180 1440,320 L1440,0 Z"
+              fill="url(#topRightFlare)"
+            />
+            <path
+              d="M1100,0 C1220,70 1350,170 1440,280"
+              stroke="#DEC797"
+              strokeWidth="2.5"
+              strokeOpacity="0.4"
+              fill="none"
+            />
+            <path
+              d="M1180,0 C1280,60 1380,140 1440,210"
+              stroke="#E9D5AA"
+              strokeWidth="1.5"
+              strokeOpacity="0.5"
+              fill="none"
+            />
+
+            {/* 3. Left Navy Area with Perfectly Positioned S-Curve Edge */}
+            <g filter="url(#navyWaveShadow)">
+              <path
+                d="M0,0 L675,0 C685,90 735,170 750,260 C768,360 720,470 675,580 C640,680 670,790 705,900 L0,900 Z"
+                fill="url(#navyBgGradient)"
+              />
+            </g>
+
+            {/* 4. Bottom-left Silk Light Wave Accents */}
+            <path
+              d="M0,640 C170,700 340,790 480,900 L0,900 Z"
+              fill="url(#bottomLeftSheen)"
+            />
+            <path
+              d="M0,640 C170,700 340,790 480,900"
+              stroke="#E2B544"
+              strokeWidth="1.5"
+              strokeOpacity="0.3"
+              fill="none"
+            />
+            <path
+              d="M0,740 C140,780 270,840 370,900"
+              stroke="#3B82F6"
+              strokeWidth="1.5"
+              strokeOpacity="0.25"
+              fill="none"
+            />
+
+            {/* 5. Main Flowing Golden Ribbon (The dividing wave) */}
+            <path
+              d="M675,0 C685,90 735,170 750,260 C768,360 720,470 675,580 C640,680 670,790 705,900"
+              stroke="#8A6510"
+              strokeWidth="18"
+              strokeLinecap="round"
+              strokeOpacity="0.3"
+              filter="url(#ribbonShadow)"
+              fill="none"
+            />
+
+            <path
+              d="M675,0 C685,90 735,170 750,260 C768,360 720,470 675,580 C640,680 670,790 705,900"
+              stroke="url(#goldRibbonGradient)"
+              strokeWidth="14"
+              strokeLinecap="round"
+              fill="none"
+            />
+
+            <path
+              d="M675,0 C685,90 735,170 750,260 C768,360 720,470 675,580 C640,680 670,790 705,900"
+              stroke="url(#goldCenterHighlight)"
+              strokeWidth="2.5"
+              strokeLinecap="round"
+              strokeOpacity="0.9"
+              fill="none"
+            />
+
+            <path
+              d="M688,0 C698,90 749,170 764,260 C782,360 734,470 689,580 C654,680 684,790 719,900"
+              stroke="#E2B544"
+              strokeWidth="1.5"
+              strokeOpacity="0.5"
+              fill="none"
+            />
+          </svg>
+        </div>
+
+        {/* LEFT BRANDING HALF (48% width): Centered inside navy area */}
         <section
           aria-label="Community Centre Information"
-          className="w-1/2 h-full bg-navy border-r-[6px] border-light-gold flex flex-col items-center justify-center p-6 xl:p-10 2xl:p-14 text-center select-none overflow-y-auto no-scrollbar"
+          style={{ width: "48%", height: "100%" }}
+          className="relative z-10 flex flex-col items-center justify-center p-8 xl:p-14 text-center"
         >
-          {/* 1. Logo, round, soft shadow, responsive dimensions */}
-          <div className="relative w-[150px] h-[150px] xl:w-[185px] xl:h-[185px] 2xl:w-[210px] 2xl:h-[210px] shrink-0">
+          {/* Logo with warm radial golden aura */}
+          <div className="relative flex items-center justify-center shrink-0">
+            <div
+              style={{
+                width: "250px",
+                height: "250px",
+                borderRadius: "50%",
+                background: "radial-gradient(circle, rgba(226,181,68,0.2) 0%, transparent 70%)",
+                position: "absolute",
+                pointerEvents: "none",
+              }}
+              aria-hidden="true"
+            />
             <Image
               src="/logo.png"
               alt="Haji Mohamed Yunus Valibhoy Community Centre logo"
-              fill
-              sizes="(max-width: 1280px) 150px, (max-width: 1536px) 185px, 210px"
-              className="rounded-full object-contain shadow-[0_12px_40px_rgba(0,0,0,0.3)] select-none"
+              width={200}
+              height={200}
+              unoptimized
               priority
+              className="rounded-full object-contain select-none"
+              style={{ filter: "drop-shadow(0 14px 32px rgba(0,0,0,0.38))" }}
             />
           </div>
 
-          {/* 2. Heading, white, bold, two lines */}
-          <h1 className="text-white text-[24px] xl:text-[28px] 2xl:text-[32px] font-bold leading-[1.25] mt-4 xl:mt-5 tracking-tight font-poppins">
+          {/* Heading: Haji Mohamed Yunus Valibhoy Community Centre */}
+          <h1
+            style={{
+              color: "#FFFFFF",
+              fontSize: "28px",
+              fontWeight: 700,
+              lineHeight: 1.25,
+              marginTop: "22px",
+              fontFamily: "var(--font-poppins), 'Poppins', sans-serif",
+            }}
+            className="tracking-tight"
+          >
             <span>Haji Mohamed Yunus Valibhoy</span>
             <br />
             <span>Community Centre</span>
           </h1>
 
-          {/* 3. Ornament divider: gold line - small rotated gold diamond (10px) - gold line */}
-          <div className="flex items-center justify-center w-[220px] xl:w-[260px] my-3 xl:my-4" aria-hidden="true">
-            <div className="flex-1 h-[1.5px] bg-gold" />
-            <div className="w-[9px] h-[9px] bg-gold rotate-45 mx-3 shrink-0" />
-            <div className="flex-1 h-[1.5px] bg-gold" />
+          {/* Gold Diamond Ornament Divider */}
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              width: "230px",
+              margin: "14px 0",
+            }}
+            aria-hidden="true"
+          >
+            <div style={{ flex: 1, height: "1.5px", backgroundColor: "#E2B544" }} />
+            <div
+              style={{
+                width: "9px",
+                height: "9px",
+                backgroundColor: "#E2B544",
+                transform: "rotate(45deg)",
+                margin: "0 10px",
+                flexShrink: 0,
+              }}
+            />
+            <div style={{ flex: 1, height: "1.5px", backgroundColor: "#E2B544" }} />
           </div>
 
-          {/* 4. Gujarati name, pale-gold, bold, two lines */}
+          {/* Gujarati Heading: હાજી મોહમ્મદ યુનુસ વલીભોય કોમ્યુનિટી સેન્ટર */}
           <h2
             lang="gu"
-            className="text-pale-gold text-[19px] xl:text-[22px] 2xl:text-[25px] font-bold leading-[1.3] tracking-wide font-gujarati"
+            style={{
+              color: "#E2B544",
+              fontSize: "22px",
+              fontWeight: 700,
+              lineHeight: 1.3,
+              fontFamily: "var(--font-gujarati), 'Noto Sans Gujarati', sans-serif",
+            }}
+            className="tracking-wide"
           >
             <span>હાજી મોહમ્મદ યુનુસ વલીભોય</span>
             <br />
             <span>કોમ્યુનિટી સેન્ટર</span>
           </h2>
 
-          {/* 5. Subtitle in #D6DEEB */}
-          <p className="text-[#D6DEEB] text-[13px] xl:text-[14.5px] font-normal mt-2 xl:mt-2.5 tracking-wide">
+          {/* Subtitle: Serving Humanity · Dhari, Gujarat, India */}
+          <p
+            style={{
+              color: "rgba(255,255,255,0.9)",
+              fontSize: "14px",
+              fontWeight: 400,
+              marginTop: "10px",
+            }}
+            className="tracking-wide"
+          >
             Serving Humanity · Dhari, Gujarat, India
           </p>
-
-          {/* 6. Four pill chips */}
-          <div className="flex flex-wrap items-center justify-center gap-2 xl:gap-2.5 max-w-[460px] mt-4 xl:mt-6">
-            {PILL_CHIPS.map((chip) => (
-              <span
-                key={chip}
-                className="px-3.5 py-1 xl:px-4 xl:py-1.5 text-[12px] xl:text-[13px] font-medium text-pale-gold border border-[rgba(226,181,68,0.5)] bg-[rgba(244,207,106,0.05)] rounded-full transition-all duration-200 hover:bg-[rgba(244,207,106,0.12)] cursor-default select-none"
-              >
-                {chip}
-              </span>
-            ))}
-          </div>
         </section>
 
-        {/* RIGHT PANEL (50% width): Cream background, centered sign-in card */}
+        {/* RIGHT SIGN IN HALF (52% width): Centered floating card over cream */}
         <section
           aria-label="Sign In"
-          className="w-1/2 h-full bg-cream flex items-center justify-center p-6 xl:p-10 overflow-y-auto no-scrollbar"
+          style={{ width: "52%", height: "100%" }}
+          className="relative z-10 flex items-center justify-center p-8 xl:p-12 overflow-y-auto no-scrollbar"
         >
-          <LoginForm hideCardBorderOnMobile={false} />
+          <LoginForm />
         </section>
       </div>
 
       {/* =========================================================================
-          MOBILE / TABLET LAYOUT (< 1024px): Single Column, Wave Banner
+          MOBILE / TABLET LAYOUT (< 1024px): Top Navy Banner + Wave + Card
           ========================================================================= */}
-      <div className="lg:hidden flex flex-col min-h-screen w-full bg-cream">
-        {/* Top: navy band about 230px tall with curved SVG wave in cream + 4px light-gold stroke */}
-        <div className="relative w-full h-[230px] bg-navy flex items-start justify-center overflow-hidden">
-          {/* Subtle radial sheen */}
-          <div
-            className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-blue-900/40 via-transparent to-transparent pointer-events-none"
-            aria-hidden="true"
-          />
-
-          {/* Curved SVG Wave along the bottom */}
+      <div
+        style={{ backgroundColor: "#FAF6EF" }}
+        className="lg:hidden flex flex-col min-h-screen w-full"
+      >
+        {/* Top Navy Section with Branding and Curved Golden Wave */}
+        <div
+          style={{
+            backgroundColor: "#0B2A5B",
+            backgroundImage: "radial-gradient(ellipse at top, #123B7C 0%, #0B2A5B 60%, #041533 100%)",
+          }}
+          className="relative w-full pt-10 pb-20 px-4 text-center overflow-hidden"
+        >
+          {/* Bottom Curved Golden Wave to Cream */}
           <div className="absolute -bottom-[1px] left-0 w-full overflow-hidden leading-none z-0">
             <svg
-              viewBox="0 0 1440 100"
+              viewBox="0 0 1440 120"
               fill="none"
               xmlns="http://www.w3.org/2000/svg"
-              className="relative block w-full h-[60px]"
+              className="relative block w-full h-[54px] sm:h-[70px]"
               preserveAspectRatio="none"
             >
-              {/* Cream fill below curve */}
+              <defs>
+                <linearGradient id="mobileGoldRibbon" x1="0%" y1="0%" x2="100%" y2="0%">
+                  <stop offset="0%" stopColor="#C9971C" />
+                  <stop offset="35%" stopColor="#F7E6A9" />
+                  <stop offset="70%" stopColor="#E2B544" />
+                  <stop offset="100%" stopColor="#C9971C" />
+                </linearGradient>
+              </defs>
               <path
-                d="M0,35 Q720,105 1440,35 L1440,100 L0,100 Z"
-                fill="#FBF6EC"
+                d="M0,45 Q720,115 1440,45 L1440,120 L0,120 Z"
+                fill="#FAF6EF"
               />
-              {/* 4px light-gold stroke along the curve */}
               <path
-                d="M0,35 Q720,105 1440,35"
-                stroke="#E2B544"
-                strokeWidth="4"
+                d="M0,45 Q720,115 1440,45"
+                stroke="url(#mobileGoldRibbon)"
+                strokeWidth="5"
                 strokeLinecap="round"
                 fill="none"
               />
             </svg>
           </div>
-        </div>
 
-        {/* Logo 168px overlapping the navy band (pulled up across the curve), with shadow */}
-        <div className="relative -mt-[84px] z-10 mx-auto w-[168px] h-[168px] shrink-0">
-          <Image
-            src="/logo.png"
-            alt="Haji Mohamed Yunus Valibhoy Community Centre logo"
-            width={168}
-            height={168}
-            className="rounded-full object-contain shadow-[0_12px_36px_rgba(0,0,0,0.25)] select-none"
-            priority
-          />
-        </div>
+          {/* Content inside top banner */}
+          <div className="relative z-10 flex flex-col items-center">
+            {/* Logo */}
+            <div className="relative shrink-0">
+              <Image
+                src="/logo.png"
+                alt="Haji Mohamed Yunus Valibhoy Community Centre logo"
+                width={150}
+                height={150}
+                unoptimized
+                priority
+                className="rounded-full object-contain select-none"
+                style={{ filter: "drop-shadow(0 10px 24px rgba(0,0,0,0.35))" }}
+              />
+            </div>
 
-        {/* Brand identity on cream */}
-        <div className="px-4 text-center mt-3 select-none">
-          {/* English name (navy, 22px bold, centred) */}
-          <h1 className="text-navy text-[19px] sm:text-[22px] font-bold leading-tight font-poppins break-normal">
-            <span className="block">Haji Mohamed Yunus Valibhoy</span>
-            <span className="block mt-0.5">Community Centre</span>
-          </h1>
+            {/* English Name */}
+            <h1
+              style={{
+                color: "#FFFFFF",
+                fontSize: "20px",
+                fontWeight: 700,
+                lineHeight: 1.25,
+                marginTop: "14px",
+                fontFamily: "var(--font-poppins), 'Poppins', sans-serif",
+              }}
+            >
+              <span>Haji Mohamed Yunus Valibhoy</span>
+              <br />
+              <span>Community Centre</span>
+            </h1>
 
-          {/* Gold diamond divider (220px) */}
-          <div className="flex items-center justify-center w-[220px] max-w-[85%] mx-auto my-3" aria-hidden="true">
-            <div className="flex-1 h-[1.5px] bg-gold" />
-            <div className="w-[8px] h-[8px] bg-gold rotate-45 mx-2.5 shrink-0" />
-            <div className="flex-1 h-[1.5px] bg-gold" />
+            {/* Gold Diamond Divider */}
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                width: "180px",
+                margin: "10px 0",
+              }}
+              aria-hidden="true"
+            >
+              <div style={{ flex: 1, height: "1.5px", backgroundColor: "#E2B544" }} />
+              <div
+                style={{
+                  width: "8px",
+                  height: "8px",
+                  backgroundColor: "#E2B544",
+                  transform: "rotate(45deg)",
+                  margin: "0 8px",
+                  flexShrink: 0,
+                }}
+              />
+              <div style={{ flex: 1, height: "1.5px", backgroundColor: "#E2B544" }} />
+            </div>
+
+            {/* Gujarati Name */}
+            <h2
+              lang="gu"
+              style={{
+                color: "#E2B544",
+                fontSize: "17px",
+                fontWeight: 700,
+                lineHeight: 1.3,
+                fontFamily: "var(--font-gujarati), 'Noto Sans Gujarati', sans-serif",
+              }}
+            >
+              <span>હાજી મોહમ્મદ યુનુસ વલીભોય</span>
+              <br />
+              <span>કોમ્યુનિટી સેન્ટર</span>
+            </h2>
+
+            {/* Subtitle */}
+            <p
+              style={{
+                color: "rgba(255,255,255,0.9)",
+                fontSize: "12.5px",
+                fontWeight: 400,
+                marginTop: "6px",
+                marginBottom: "28px",
+              }}
+            >
+              Serving Humanity · Dhari, Gujarat, India
+            </p>
           </div>
-
-          {/* Gujarati name (navy, 18px bold) */}
-          <h2
-            lang="gu"
-            className="text-navy text-[17px] sm:text-[18px] font-bold leading-normal font-gujarati"
-          >
-            <span className="block">હાજી મોહમ્મદ યુનુસ વલીભોય</span>
-            <span className="block">કોમ્યુનિટી સેન્ટર</span>
-          </h2>
         </div>
 
-        {/* Sign In Form (without card border, 24px side padding, 52px inputs) */}
-        <div className="w-full px-6 mt-6 pb-2">
-          <LoginForm hideCardBorderOnMobile={true} />
+        {/* Floating Sign In Card on Cream */}
+        <div className="w-full px-4 sm:px-6 -mt-3 sm:-mt-4 pb-12 flex items-center justify-center z-10">
+          <LoginForm />
         </div>
-
-        {/* Mobile Footer: Secure login + Serving Humanity */}
-        <footer className="mt-auto pt-6 pb-8 px-6 text-center flex flex-col items-center gap-1.5 select-none">
-          <div className="flex items-center justify-center gap-1.5 text-muted text-[12px] font-medium">
-            <ShieldCheck className="w-4 h-4 text-success shrink-0" aria-hidden="true" />
-            <span>Secure login · Role-based access</span>
-          </div>
-          <p className="text-muted text-[12px] font-normal">
-            Serving Humanity · Dhari, Gujarat, India
-          </p>
-        </footer>
       </div>
     </div>
   );

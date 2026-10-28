@@ -87,77 +87,32 @@ export default function LoginForm({ className = "", hideCardBorderOnMobile = tru
     }
   };
 
-  if (!isMounted) {
-    return (
-      <div
-        className={`w-full max-w-[420px] mx-auto ${
-          hideCardBorderOnMobile
-            ? "lg:bg-white lg:border lg:border-card-border lg:rounded-[20px] lg:p-7 xl:p-[34px] lg:shadow-[0_10px_30px_rgba(11,42,91,0.08)] p-0"
-            : "bg-white border border-card-border rounded-[20px] p-7 xl:p-[34px] shadow-[0_10px_30px_rgba(11,42,91,0.08)]"
-        } ${className}`}
-        suppressHydrationWarning
-      >
-        <div className="flex flex-col gap-3.5 xl:gap-[18px]" suppressHydrationWarning>
-          <div>
-            <h2 className="text-[26px] font-bold text-navy leading-tight tracking-tight">Sign in</h2>
-            <p className="text-muted text-[14px] mt-1 font-normal leading-normal">
-              Use the user ID given by your administrator.
-            </p>
-          </div>
-
-          <div>
-            <div className="block text-[13px] font-semibold text-navy mb-1.5">User ID</div>
-            <div className="w-full h-[52px] rounded-[12px] border-[1.5px] border-field-border bg-white" />
-          </div>
-
-          <div>
-            <div className="block text-[13px] font-semibold text-navy mb-1.5">Password</div>
-            <div className="w-full h-[52px] rounded-[12px] border-[1.5px] border-field-border bg-white" />
-          </div>
-
-          <div className="flex items-center justify-between select-none min-h-[44px]">
-            <div className="flex items-center gap-2">
-              <div className="w-4 h-4 rounded border border-field-border bg-navy/10" />
-              <span className="text-[12.5px] sm:text-[13px] text-muted font-medium">Keep me signed in</span>
-            </div>
-            <span className="text-[12.5px] sm:text-[13px] font-semibold text-navy">Forgot password?</span>
-          </div>
-
-          <div className="w-full h-[54px] rounded-[14px] bg-navy text-white text-[16px] font-semibold flex items-center justify-center gap-2">
-            <span>Login</span>
-            <ArrowRight className="w-5 h-5" />
-          </div>
-
-          <div className="hidden lg:flex items-center justify-center gap-1.5 text-muted text-[12px] font-medium pt-1">
-            <ShieldCheck className="w-4 h-4 text-success shrink-0" aria-hidden="true" />
-            <span>Secure session · Role-based access</span>
-          </div>
-
-          <div className="mt-1 pt-3 border-t border-field-border/40 text-center">
-            <p className="text-[11px] text-muted/70">
-              Demo access: <span className="font-semibold text-navy">manager</span> / <span className="font-mono text-navy">manager123</span> &bull; <span className="font-semibold text-navy">admin</span> / <span className="font-mono text-navy">admin123</span>
-            </p>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div
-      className={`w-full max-w-[420px] mx-auto ${
-        hideCardBorderOnMobile
-          ? "lg:bg-white lg:border lg:border-card-border lg:rounded-[20px] lg:p-7 xl:p-[34px] lg:shadow-[0_10px_30px_rgba(11,42,91,0.08)] p-0"
-          : "bg-white border border-card-border rounded-[20px] p-7 xl:p-[34px] shadow-[0_10px_30px_rgba(11,42,91,0.08)]"
-      } ${className}`}
+      style={{
+        backgroundColor: "#FFFEFA",
+        borderColor: "#EFE4CC",
+        borderWidth: "1px",
+        borderRadius: "24px",
+        boxShadow: "0 20px 50px -10px rgba(11, 42, 91, 0.09), 0 4px 16px rgba(201, 151, 28, 0.05)",
+      }}
+      className={`w-full max-w-[420px] mx-auto p-7 sm:p-9 ${className}`}
       suppressHydrationWarning
     >
-      <form onSubmit={handleSubmit} noValidate suppressHydrationWarning className="flex flex-col gap-3.5 xl:gap-[18px]">
+      <form onSubmit={handleSubmit} noValidate suppressHydrationWarning className="flex flex-col gap-4">
         {/* Header */}
         <div>
-          <h2 className="text-[26px] font-bold text-navy leading-tight tracking-tight">Sign in</h2>
-          <p className="text-muted text-[14px] mt-1 font-normal leading-normal">
-            Use the user ID given by your administrator.
+          <h2
+            style={{ color: "#0B224E" }}
+            className="text-[28px] sm:text-[31px] font-bold leading-tight tracking-tight font-poppins"
+          >
+            Welcome back
+          </h2>
+          <p
+            style={{ color: "#64748B" }}
+            className="text-[13.5px] mt-1.5 font-normal leading-relaxed max-w-[340px]"
+          >
+            Sign in to continue to the Community Centre Management System.
           </p>
         </div>
 
@@ -192,12 +147,16 @@ export default function LoginForm({ className = "", hideCardBorderOnMobile = tru
 
         {/* User ID Field */}
         <div>
-          <label htmlFor="userId" className="block text-[13px] font-semibold text-navy mb-1.5">
+          <label
+            htmlFor="userId"
+            style={{ color: "#0B224E" }}
+            className="block text-[13.5px] font-semibold mb-1.5"
+          >
             User ID
           </label>
           <div className="relative flex items-center" suppressHydrationWarning>
-            <span className="absolute left-4 text-muted pointer-events-none flex items-center">
-              <User className="w-5 h-5 text-muted" aria-hidden="true" />
+            <span className="absolute left-3.5 text-[#64748B] pointer-events-none flex items-center">
+              <User className="w-[18px] h-[18px]" aria-hidden="true" strokeWidth={1.8} />
             </span>
             <input
               ref={userIdInputRef}
@@ -217,11 +176,14 @@ export default function LoginForm({ className = "", hideCardBorderOnMobile = tru
               placeholder="Enter your user ID"
               aria-invalid={!!errors.userId}
               aria-describedby={errors.userId ? "userId-error" : undefined}
-              className={`w-full h-[52px] pl-11 pr-4 text-[14px] text-ink bg-white rounded-[12px] border-[1.5px] transition-all placeholder:text-muted/60 focus:outline-none focus:ring-2 focus:ring-light-gold focus:border-transparent ${
-                errors.userId
-                  ? "border-error focus:ring-error"
-                  : "border-field-border hover:border-light-gold/80"
-              }`}
+              style={{
+                height: "48px",
+                borderRadius: "11px",
+                borderColor: errors.userId ? "#C62828" : "#DFCFA8",
+                borderWidth: "1.2px",
+                backgroundColor: "#FFFFFF",
+              }}
+              className="w-full pl-10 pr-4 text-[14px] text-ink transition-all placeholder:text-[#9CA3AF] focus:outline-none focus:ring-2 focus:ring-light-gold focus:border-transparent hover:border-light-gold"
             />
           </div>
           {errors.userId && (
@@ -233,12 +195,16 @@ export default function LoginForm({ className = "", hideCardBorderOnMobile = tru
 
         {/* Password Field */}
         <div>
-          <label htmlFor="password" className="block text-[13px] font-semibold text-navy mb-1.5">
+          <label
+            htmlFor="password"
+            style={{ color: "#0B224E" }}
+            className="block text-[13.5px] font-semibold mb-1.5"
+          >
             Password
           </label>
           <div className="relative flex items-center" suppressHydrationWarning>
-            <span className="absolute left-4 text-muted pointer-events-none flex items-center">
-              <Lock className="w-5 h-5 text-muted" aria-hidden="true" />
+            <span className="absolute left-3.5 text-[#64748B] pointer-events-none flex items-center">
+              <Lock className="w-[18px] h-[18px]" aria-hidden="true" strokeWidth={1.8} />
             </span>
             <input
               id="password"
@@ -257,22 +223,25 @@ export default function LoginForm({ className = "", hideCardBorderOnMobile = tru
               placeholder="Enter your password"
               aria-invalid={!!errors.password}
               aria-describedby={errors.password ? "password-error" : undefined}
-              className={`w-full h-[52px] pl-11 pr-12 text-[14px] text-ink bg-white rounded-[12px] border-[1.5px] transition-all placeholder:text-muted/60 focus:outline-none focus:ring-2 focus:ring-light-gold focus:border-transparent ${
-                errors.password
-                  ? "border-error focus:ring-error"
-                  : "border-field-border hover:border-light-gold/80"
-              }`}
+              style={{
+                height: "48px",
+                borderRadius: "11px",
+                borderColor: errors.password ? "#C62828" : "#DFCFA8",
+                borderWidth: "1.2px",
+                backgroundColor: "#FFFFFF",
+              }}
+              className="w-full pl-10 pr-11 text-[14px] text-ink transition-all placeholder:text-[#9CA3AF] focus:outline-none focus:ring-2 focus:ring-light-gold focus:border-transparent hover:border-light-gold"
             />
             <button
               type="button"
               onClick={() => setShowPassword(!showPassword)}
               aria-label={showPassword ? "Hide password" : "Show password"}
-              className="absolute right-1 w-[44px] h-[44px] flex items-center justify-center text-muted hover:text-navy focus:outline-none focus:ring-2 focus:ring-light-gold rounded-lg transition-colors cursor-pointer"
+              className="absolute right-1 w-[44px] h-[44px] flex items-center justify-center text-[#64748B] hover:text-navy focus:outline-none focus:ring-2 focus:ring-light-gold rounded-lg transition-colors cursor-pointer"
             >
               {showPassword ? (
-                <EyeOff className="w-5 h-5 text-muted" aria-hidden="true" />
+                <EyeOff className="w-[18px] h-[18px]" aria-hidden="true" strokeWidth={1.8} />
               ) : (
-                <Eye className="w-5 h-5 text-muted" aria-hidden="true" />
+                <Eye className="w-[18px] h-[18px]" aria-hidden="true" strokeWidth={1.8} />
               )}
             </button>
           </div>
@@ -283,23 +252,50 @@ export default function LoginForm({ className = "", hideCardBorderOnMobile = tru
           )}
         </div>
 
-        {/* Row: Checkbox "Keep me signed in" & link "Forgot password?" */}
-        <div className="flex items-center justify-between select-none">
-          <label className="flex items-center gap-2 cursor-pointer min-h-[44px] group">
-            <input
-              type="checkbox"
-              checked={keepMeSignedIn}
-              onChange={(e) => setKeepMeSignedIn(e.target.checked)}
-              className="w-4 h-4 rounded border-field-border text-navy accent-navy focus:outline-none focus:ring-2 focus:ring-light-gold cursor-pointer"
-            />
-            <span className="text-[12.5px] sm:text-[13px] text-muted group-hover:text-ink transition-colors font-medium whitespace-nowrap">
-              Keep me signed in
+        {/* Row: Checkbox "Remember Me" & link "Forgot password?" */}
+        <div className="flex items-center justify-between select-none pt-0.5">
+          <label className="flex items-center gap-2.5 cursor-pointer min-h-[44px] group">
+            <div
+              onClick={() => setKeepMeSignedIn(!keepMeSignedIn)}
+              style={{
+                width: "18px",
+                height: "18px",
+                borderRadius: "4px",
+                backgroundColor: keepMeSignedIn ? "#0B224E" : "#FFFFFF",
+                borderColor: keepMeSignedIn ? "#0B224E" : "#CBD5E1",
+                borderWidth: "1.5px",
+                borderStyle: "solid",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                cursor: "pointer",
+                flexShrink: 0,
+              }}
+            >
+              {keepMeSignedIn && (
+                <svg width="11" height="9" viewBox="0 0 11 9" fill="none">
+                  <path
+                    d="M1.5 4.5L4 7L9.5 1.5"
+                    stroke="white"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </svg>
+              )}
+            </div>
+            <span
+              style={{ color: "#334155" }}
+              className="text-[13px] font-medium whitespace-nowrap"
+            >
+              Remember Me
             </span>
           </label>
           <button
             type="button"
             onClick={() => setForgotPasswordNotice(true)}
-            className="text-[12.5px] sm:text-[13px] font-semibold text-navy hover:text-deep-gold focus:outline-none focus:ring-2 focus:ring-light-gold rounded px-1 py-2 min-h-[44px] flex items-center transition-colors cursor-pointer whitespace-nowrap"
+            style={{ color: "#2563EB" }}
+            className="text-[13px] font-normal hover:underline focus:outline-none focus:ring-2 focus:ring-light-gold rounded px-1 py-2 min-h-[44px] flex items-center transition-colors cursor-pointer whitespace-nowrap"
           >
             Forgot password?
           </button>
@@ -309,7 +305,13 @@ export default function LoginForm({ className = "", hideCardBorderOnMobile = tru
         <button
           type="submit"
           disabled={isLoading}
-          className="w-full h-[54px] rounded-[14px] bg-navy text-white text-[16px] font-semibold flex items-center justify-center gap-2 shadow-sm hover:bg-[#071f43] active:bg-[#051630] focus:outline-none focus:ring-2 focus:ring-light-gold focus:ring-offset-2 transition-all disabled:opacity-75 disabled:cursor-not-allowed group cursor-pointer"
+          style={{
+            height: "50px",
+            backgroundColor: "#08204D",
+            borderRadius: "11px",
+            color: "#FFFFFF",
+          }}
+          className="w-full text-[15.5px] font-semibold flex items-center justify-center gap-2 shadow-sm hover:bg-[#0B2A5B] active:scale-[0.99] focus:outline-none focus:ring-2 focus:ring-light-gold focus:ring-offset-2 transition-all disabled:opacity-75 disabled:cursor-not-allowed group cursor-pointer mt-1"
         >
           {isLoading ? (
             <div className="flex items-center justify-center gap-2">
@@ -338,21 +340,31 @@ export default function LoginForm({ className = "", hideCardBorderOnMobile = tru
           ) : (
             <>
               <span>Login</span>
-              <ArrowRight className="w-5 h-5 transition-transform group-hover:translate-x-0.5" />
+              <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-0.5" />
             </>
           )}
         </button>
 
-        {/* Footer line on desktop card */}
-        <div className="hidden lg:flex items-center justify-center gap-1.5 text-muted text-[12px] font-medium pt-1">
-          <ShieldCheck className="w-4 h-4 text-success shrink-0" aria-hidden="true" />
+        {/* Subtle Horizontal Divider as in Mockup */}
+        <div style={{ height: "1px", backgroundColor: "#EDE5D6", margin: "14px 0 6px" }} />
+
+        {/* Footer line inside card */}
+        <div
+          style={{ color: "#64748B" }}
+          className="flex items-center justify-center gap-1.5 text-[12.5px] font-normal"
+        >
+          <ShieldCheck
+            style={{ color: "#16A34A" }}
+            className="w-4 h-4 shrink-0"
+            aria-hidden="true"
+          />
           <span>Secure session · Role-based access</span>
         </div>
 
         {/* Quick Demo Helper Hint */}
-        <div className="mt-1 pt-3 border-t border-field-border/40 text-center">
-          <p className="text-[11px] text-muted/70">
-            Demo access: <span className="font-semibold text-navy">manager</span> / <span className="font-mono text-navy">manager123</span> &bull; <span className="font-semibold text-navy">admin</span> / <span className="font-mono text-navy">admin123</span>
+        <div className="mt-0.5 text-center">
+          <p style={{ color: "#94A3B8", fontSize: "11px" }}>
+            Demo: <strong style={{ color: "#0B224E" }}>manager</strong> / manager123 &bull; <strong style={{ color: "#0B224E" }}>admin</strong> / admin123
           </p>
         </div>
       </form>
