@@ -33,14 +33,14 @@ export default async function AppLayout({
 
   return (
     <DashboardProvider initialRole={role} initialUserId={userId}>
-      <div className="min-h-screen bg-cream flex font-sans text-ink antialiased">
+      <div className="min-h-screen bg-[#F8FAFC] flex font-sans text-ink antialiased">
         {/* Responsive Sidebar */}
         <Sidebar />
 
         {/* Content Area with Topbar */}
         <div className="flex-1 flex flex-col min-w-0">
           <Topbar />
-          <main className="flex-1 bg-cream">
+          <main className="flex-1 bg-[#F8FAFC]">
             {children}
           </main>
         </div>

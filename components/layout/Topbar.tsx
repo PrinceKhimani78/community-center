@@ -26,39 +26,71 @@ export default function Topbar({ title = "Dashboard", breadcrumb = "Home" }: Top
   const userRoleTitle = isManager ? "Centre Manager" : "Trustee / Admin";
 
   return (
-    <header className="h-[76px] bg-white border-b border-[#EFE4CC] sticky top-0 z-20 px-4 sm:px-6 lg:px-8 flex items-center justify-between gap-4">
+    <header className="h-[64px] bg-white border-b border-slate-200 sticky top-0 z-20 px-4 sm:px-6 lg:px-8 flex items-center justify-between gap-4">
       {/* Left: Mobile Menu Button + Title / Breadcrumb */}
-      <div className="flex items-center gap-3 sm:gap-4 min-w-0">
+      <div className="flex items-center gap-3 min-w-0">
         <button
           type="button"
           onClick={toggleMobileSidebar}
-          className="lg:hidden p-2 rounded-xl text-navy hover:bg-cream border border-[#EFE4CC] flex items-center justify-center"
+          className="lg:hidden p-1.5 rounded-lg text-navy hover:bg-slate-100 border border-slate-200 flex items-center justify-center cursor-pointer"
           aria-label="Open navigation menu"
         >
           <Menu className="w-5 h-5" />
         </button>
 
         <div className="flex flex-col justify-center min-w-0">
-          <span className="text-[12px] text-muted font-medium">{breadcrumb}</span>
-          <h2 className="text-[20px] font-bold text-navy leading-none mt-0.5 tracking-tight truncate">
+          <span className="text-[11px] text-slate-500 font-medium leading-none">{breadcrumb}</span>
+          <h2 className="text-[17px] font-bold text-navy leading-tight mt-0.5 tracking-tight truncate">
             {title}
           </h2>
         </div>
       </div>
 
       {/* Right items: Search, Date Chip, Bell, Profile */}
-      <div className="flex items-center gap-2.5 sm:gap-3.5">
+      <div className="flex items-center gap-2 sm:gap-3">
         {/* Search box - Desktop */}
-        <div className="hidden md:flex items-center relative w-[280px] xl:w-[320px]">
-          <Search className="w-4 h-4 text-muted absolute left-3.5 pointer-events-none" />
+        <div
+          style={{ position: "relative", width: "320px" }}
+          className="hidden md:flex items-center"
+        >
+          <Search
+            style={{ position: "absolute", left: "12px", color: "#64748B", pointerEvents: "none" }}
+            className="w-3.5 h-3.5"
+          />
           <input
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Search applicant, booking or receipt no."
-            className="w-full h-[42px] pl-10 pr-14 rounded-full bg-[#FBF6EC] border border-[#EFE4CC] text-[13px] text-navy placeholder:text-muted/70 focus:outline-none focus:ring-2 focus:ring-light-gold transition-all"
+            style={{
+              height: "36px",
+              paddingLeft: "34px",
+              paddingRight: "56px",
+              backgroundColor: "#F8FAFC",
+              borderColor: "#E2E8F0",
+              borderWidth: "1px",
+              borderRadius: "9999px",
+              fontSize: "12.5px",
+              color: "#0B2A5B",
+              width: "100%",
+            }}
+            className="focus:outline-none focus:ring-2 focus:ring-[#E2B544] transition-all placeholder:text-[#94A3B8]"
           />
-          <span className="absolute right-3 px-1.5 py-0.5 rounded text-[11px] font-medium bg-white text-muted border border-[#EFE4CC] pointer-events-none shadow-2xs">
+          <span
+            style={{
+              position: "absolute",
+              right: "8px",
+              backgroundColor: "#FFFFFF",
+              borderColor: "#CBD5E1",
+              borderWidth: "1px",
+              fontSize: "10px",
+              color: "#64748B",
+              padding: "1.5px 5px",
+              borderRadius: "4px",
+              pointerEvents: "none",
+            }}
+            className="font-medium shadow-2xs"
+          >
             Ctrl K
           </span>
         </div>
@@ -67,55 +99,101 @@ export default function Topbar({ title = "Dashboard", breadcrumb = "Home" }: Top
         <button
           type="button"
           onClick={() => setIsMobileSearchOpen(!isMobileSearchOpen)}
-          className="md:hidden w-[40px] h-[40px] rounded-full bg-[#FBF6EC] border border-[#EFE4CC] flex items-center justify-center text-navy hover:bg-[#F8E7B9]/40"
+          style={{
+            width: "36px",
+            height: "36px",
+            backgroundColor: "#F8FAFC",
+            borderColor: "#E2E8F0",
+            borderWidth: "1px",
+          }}
+          className="md:hidden rounded-full flex items-center justify-center text-navy hover:bg-slate-100"
           aria-label="Search"
         >
           <Search className="w-4 h-4 text-navy" />
         </button>
 
         {/* Date chip */}
-        <div className="hidden sm:flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-[#F8E7B9] text-navy border border-[#E2B544]/30 select-none shadow-2xs">
-          <Calendar className="w-3.5 h-3.5 text-navy shrink-0" />
-          <span className="text-[13px] font-medium whitespace-nowrap">Tue, 20 Oct 2026</span>
+        <div
+          style={{
+            backgroundColor: "#FFF9EA",
+            borderColor: "rgba(226, 181, 68, 0.4)",
+            borderWidth: "1px",
+            color: "#8A6510",
+          }}
+          className="hidden sm:flex items-center gap-1.5 px-3 py-1 rounded-full select-none shadow-2xs"
+        >
+          <Calendar className="w-3.5 h-3.5 text-[#8A6510] shrink-0" />
+          <span className="text-[12px] font-medium whitespace-nowrap">Tue, 20 Oct 2026</span>
         </div>
 
-        {/* Bell Button (44x44) with red count bubble */}
+        {/* Bell Button with red count bubble */}
         <Link
           href="/notifications"
-          className="w-[44px] h-[44px] rounded-full bg-cream/70 hover:bg-[#F8E7B9]/40 border border-[#EFE4CC] relative flex items-center justify-center text-navy transition-colors shrink-0"
+          style={{
+            width: "36px",
+            height: "36px",
+            backgroundColor: "#F8FAFC",
+            borderColor: "#E2E8F0",
+            borderWidth: "1px",
+            position: "relative",
+          }}
+          className="rounded-full hover:bg-slate-100 flex items-center justify-center text-navy transition-colors shrink-0"
           aria-label="Notifications"
         >
-          <Bell className="w-5 h-5 text-navy" />
+          <Bell className="w-4 h-4 text-navy" />
           {actionCount > 0 && (
-            <span className="absolute -top-1 -right-1 h-5 min-w-5 px-1 rounded-full bg-[#C62828] text-white text-[11px] font-bold flex items-center justify-center shadow-xs">
+            <span
+              style={{
+                position: "absolute",
+                top: "-3px",
+                right: "-3px",
+                backgroundColor: "#DC2626",
+                color: "#FFFFFF",
+              }}
+              className="h-4 min-w-4 px-1 rounded-full text-[9.5px] font-bold flex items-center justify-center shadow-xs"
+            >
               {actionCount}
             </span>
           )}
         </Link>
 
         {/* User Profile Avatar & Info */}
-        <div className="flex items-center gap-2.5 pl-1 sm:pl-2">
-          <div className="w-[42px] h-[42px] rounded-full bg-navy text-white font-bold text-[14px] flex items-center justify-center shrink-0 border border-light-gold/30 shadow-xs">
+        <div className="flex items-center gap-2 pl-1 sm:pl-1.5">
+          <div
+            style={{
+              width: "36px",
+              height: "36px",
+              backgroundColor: "#0B2A5B",
+              borderColor: "rgba(226, 181, 68, 0.4)",
+              borderWidth: "1px",
+              color: "#FFFFFF",
+            }}
+            className="rounded-full font-bold text-[13px] flex items-center justify-center shrink-0 shadow-xs"
+          >
             {userInitials}
           </div>
           <div className="hidden xl:flex flex-col justify-center text-left leading-tight">
-            <span className="text-[14px] font-bold text-navy">{userName}</span>
-            <span className="text-[12px] text-muted">{userRoleTitle}</span>
+            <span style={{ color: "#0B2A5B" }} className="text-[13px] font-bold">
+              {userName}
+            </span>
+            <span style={{ color: "#64748B" }} className="text-[11px]">
+              {userRoleTitle}
+            </span>
           </div>
         </div>
       </div>
 
       {/* Expandable Mobile Search Field */}
       {isMobileSearchOpen && (
-        <div className="absolute top-[76px] left-0 right-0 p-3 bg-white border-b border-[#EFE4CC] shadow-md md:hidden z-20 flex items-center gap-2">
-          <Search className="w-4 h-4 text-muted ml-2" />
+        <div className="absolute top-[64px] left-0 right-0 p-3 bg-white border-b border-slate-200 shadow-md md:hidden z-20 flex items-center gap-2">
+          <Search className="w-4 h-4 text-slate-400 ml-2" />
           <input
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Search applicant, booking or receipt no."
             autoFocus
-            className="flex-1 h-[40px] px-3 rounded-xl bg-[#FBF6EC] border border-[#EFE4CC] text-[13px] text-navy focus:outline-none focus:ring-2 focus:ring-light-gold"
+            className="flex-1 h-[36px] px-3 rounded-lg bg-slate-50 border border-slate-200 text-[13px] text-navy focus:outline-none focus:ring-2 focus:ring-[#E2B544]"
           />
         </div>
       )}

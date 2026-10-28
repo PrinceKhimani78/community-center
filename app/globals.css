@@ -34,7 +34,7 @@
 }
 
 body {
-  background-color: #FBF6EC;
+  background-color: #F8FAFC;
   color: #14213D;
   font-family: var(--font-poppins), 'Poppins', system-ui, -apple-system, sans-serif;
   -webkit-font-smoothing: antialiased;
@@ -43,6 +43,31 @@ body {
 
 [lang="gu"] {
   font-family: var(--font-gujarati), 'Noto Sans Gujarati', 'Gujarati Sangam MN', 'Shruti', sans-serif;
+}
+
+/* Sidebar navigation item styles */
+.sidebar-nav-item {
+  color: rgba(255, 255, 255, 0.72) !important;
+  transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+  border-left: 3px solid transparent;
+}
+.sidebar-nav-item:hover {
+  background-color: rgba(226, 181, 68, 0.16) !important;
+  color: #FFFFFF !important;
+  border-left: 3px solid #E2B544 !important;
+}
+.sidebar-nav-item:hover svg {
+  color: #E2B544 !important;
+}
+.sidebar-nav-item.active {
+  background: linear-gradient(90deg, rgba(226, 181, 68, 0.25) 0%, rgba(201, 151, 28, 0.1) 100%) !important;
+  color: #FFFFFF !important;
+  font-weight: 600;
+  border-left: 3px solid #E2B544 !important;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.2);
+}
+.sidebar-nav-item.active svg {
+  color: #E2B544 !important;
 }
 
 /* Custom focus ring */
