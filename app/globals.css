@@ -35,7 +35,7 @@
 
 html,
 body {
-  background-color: #F8FAFC !important;
+  background-color: #F6F8FC !important;
   color: #14213D;
   font-family: var(--font-poppins), 'Poppins', system-ui, -apple-system, sans-serif;
   -webkit-font-smoothing: antialiased;
@@ -76,6 +76,51 @@ body {
 .focus-ring-gold:focus {
   outline: none;
   box-shadow: 0 0 0 2px #E2B544;
+}
+
+/* Dashboard Interactive Hover Effects */
+.summary-card-blue {
+  transition: transform 0.22s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.22s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.2s ease;
+}
+.summary-card-blue:hover {
+  transform: translateY(-4px);
+  border-color: #2563EB !important;
+  box-shadow: 0 16px 32px -4px rgba(37, 99, 235, 0.16), 0 0 0 1px #2563EB !important;
+}
+
+.summary-card-green {
+  transition: transform 0.22s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.22s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.2s ease;
+}
+.summary-card-green:hover {
+  transform: translateY(-4px);
+  border-color: #059669 !important;
+  box-shadow: 0 16px 32px -4px rgba(5, 150, 105, 0.16), 0 0 0 1px #059669 !important;
+}
+
+.summary-card-gold {
+  transition: transform 0.22s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.22s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.2s ease;
+}
+.summary-card-gold:hover {
+  transform: translateY(-4px);
+  border-color: #E2B544 !important;
+  box-shadow: 0 16px 32px -4px rgba(226, 181, 68, 0.28), 0 0 0 1px #E2B544 !important;
+}
+
+.action-card-item {
+  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.2s ease, border-color 0.2s ease, background-color 0.15s ease;
+}
+.action-card-item:hover {
+  transform: translateY(-2px);
+  border-color: #0B2A5B !important;
+  box-shadow: 0 8px 22px -4px rgba(11, 42, 91, 0.1) !important;
+}
+
+.coming-up-item {
+  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), background-color 0.15s ease;
+}
+.coming-up-item:hover {
+  transform: translateX(5px);
+  background-color: #F8FAFC !important;
 }
 
 /* Hide scrollbars */

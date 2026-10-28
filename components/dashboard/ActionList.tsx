@@ -2,14 +2,14 @@
 
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
-import { CheckCircle2, RotateCcw, AlertTriangle, ArrowRight } from "lucide-react";
+import { CheckCircle2, RotateCcw, ArrowRight } from "lucide-react";
 import { useDashboard } from "@/lib/context/DashboardContext";
 import { ActionTag } from "@/lib/mock/dashboard";
 
 const TAG_CONFIG: Record<ActionTag, { bg: string; text: string; border: string }> = {
-  PAY: { bg: "#FEF2F2", text: "#DC2626", border: "#FEE2E2" },
-  INS: { bg: "#FFFBEB", text: "#D97706", border: "#FEF3C7" },
-  REF: { bg: "#EFF6FF", text: "#2563EB", border: "#DBEAFE" },
+  PAY: { bg: "#FFF1F2", text: "#E11D48", border: "#FFE4E6" },
+  INS: { bg: "#F5F3FF", text: "#7C3AED", border: "#EDE9FE" },
+  REF: { bg: "#EFF6FF", text: "#0284C7", border: "#DBEAFE" },
   BK: { bg: "#F0FDF4", text: "#16A34A", border: "#DCFCE7" },
   FIX: { bg: "#FAF5FF", text: "#9333EA", border: "#F3E8FF" },
 };
@@ -34,10 +34,9 @@ export default function ActionList() {
     <div
       style={{
         backgroundColor: "#FFFFFF",
-        borderColor: "#E2E8F0",
-        borderWidth: "1px",
+        border: "1px solid #E2E8F0",
         borderRadius: "12px",
-        boxShadow: "0 1px 3px rgba(0,0,0,0.03)",
+        boxShadow: "0 1px 3px rgba(15, 23, 42, 0.04)",
       }}
       className="p-4 sm:p-5 flex flex-col justify-between"
     >
@@ -57,9 +56,10 @@ export default function ActionList() {
             style={{
               backgroundColor: "#FEE2E2",
               color: "#DC2626",
+              border: "1px solid #FECACA",
               fontSize: "11px",
               fontWeight: 700,
-              padding: "1.5px 7px",
+              padding: "1px 7px",
               borderRadius: "9999px",
             }}
           >
@@ -125,22 +125,20 @@ export default function ActionList() {
                 key={item.id}
                 style={{
                   backgroundColor: "#FFFFFF",
-                  borderColor: "#E2E8F0",
-                  borderWidth: "1px",
+                  border: "1px solid #E2E8F0",
                   borderRadius: "10px",
                   padding: "12px 14px",
-                  boxShadow: "0 1px 2px rgba(0,0,0,0.02)",
-                  transition: "all 0.15s ease",
+                  boxShadow: "0 1px 2px rgba(15, 23, 42, 0.02)",
                 }}
-                className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:border-[#CBD5E1] hover:bg-slate-50/50"
+                className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 action-card-item group cursor-pointer"
               >
                 {/* Left: Tag + Title + Detail */}
                 <div className="flex items-center gap-3 min-w-0">
-                  {/* Tag badge */}
+                  {/* Color-coded Tag badge */}
                   <div
                     style={{
-                      width: "36px",
-                      height: "36px",
+                      width: "38px",
+                      height: "38px",
                       borderRadius: "8px",
                       backgroundColor: tagCfg.bg,
                       color: tagCfg.text,
@@ -153,6 +151,7 @@ export default function ActionList() {
                       justifyContent: "center",
                       flexShrink: 0,
                     }}
+                    className="group-hover:scale-105 transition-transform"
                   >
                     {item.tag}
                   </div>
@@ -191,7 +190,7 @@ export default function ActionList() {
                     boxShadow: "0 1px 2px rgba(11, 42, 91, 0.15)",
                     transition: "all 0.15s ease",
                   }}
-                  className="hover:opacity-90 active:scale-[0.98] shrink-0 whitespace-nowrap w-full sm:w-auto flex items-center justify-center"
+                  className="hover:opacity-90 active:scale-[0.98] shrink-0 whitespace-nowrap w-full sm:w-auto flex items-center justify-center cursor-pointer"
                 >
                   {item.buttonLabel}
                 </button>

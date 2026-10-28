@@ -6,12 +6,11 @@ import { User, Lock, Eye, EyeOff, ArrowRight, ShieldCheck } from "lucide-react";
 
 interface LoginFormProps {
   className?: string;
-  hideCardBorderOnMobile?: boolean;
 }
 
 const emptySubscribe = () => () => {};
 
-export default function LoginForm({ className = "", hideCardBorderOnMobile = true }: LoginFormProps) {
+export default function LoginForm({ className = "" }: LoginFormProps) {
   const router = useRouter();
   const userIdInputRef = useRef<HTMLInputElement>(null);
 
@@ -30,7 +29,6 @@ export default function LoginForm({ className = "", hideCardBorderOnMobile = tru
   const [errors, setErrors] = useState<{ userId?: string; password?: string }>({});
 
   useEffect(() => {
-    // Autofocus user ID field on desktop (>= 1024px)
     if (typeof window !== "undefined" && window.innerWidth >= 1024) {
       userIdInputRef.current?.focus();
     }
@@ -73,13 +71,11 @@ export default function LoginForm({ className = "", hideCardBorderOnMobile = tru
       const data = await response.json();
 
       if (!response.ok || !data.success) {
-        // Red alert box at top: "User ID or password is incorrect." Never say which one was wrong.
         setAuthError("User ID or password is incorrect.");
         setIsLoading(false);
         return;
       }
 
-      // Successful demo login redirect to /dashboard
       router.push("/dashboard");
     } catch {
       setAuthError("User ID or password is incorrect.");
@@ -90,29 +86,42 @@ export default function LoginForm({ className = "", hideCardBorderOnMobile = tru
   return (
     <div
       style={{
-        backgroundColor: "#FFFEFA",
-        borderColor: "#EFE4CC",
-        borderWidth: "1px",
-        borderRadius: "24px",
-        boxShadow: "0 20px 50px -10px rgba(11, 42, 91, 0.09), 0 4px 16px rgba(201, 151, 28, 0.05)",
+        backgroundColor: "#FAF5EC",
+        border: "1.5px solid rgba(226, 181, 68, 0.32)",
+        borderRadius: "26px",
+        boxShadow: "0 25px 60px -12px rgba(0, 0, 0, 0.13), 0 4px 20px rgba(226, 181, 68, 0.09)",
+        width: "100%",
+        maxWidth: "460px",
+        padding: "44px 38px",
       }}
-      className={`w-full max-w-[420px] mx-auto p-7 sm:p-9 ${className}`}
+      className={`mx-auto ${className}`}
       suppressHydrationWarning
     >
-      <form onSubmit={handleSubmit} noValidate suppressHydrationWarning className="flex flex-col gap-4">
+      <form onSubmit={handleSubmit} noValidate suppressHydrationWarning className="flex flex-col">
         {/* Header */}
         <div>
           <h2
-            style={{ color: "#0B224E" }}
-            className="text-[28px] sm:text-[31px] font-bold leading-tight tracking-tight font-poppins"
+            style={{
+              color: "#061A3E",
+              fontSize: "32px",
+              fontWeight: 800,
+              fontFamily: "var(--font-poppins), 'Poppins', sans-serif",
+              letterSpacing: "-0.02em",
+            }}
+            className="leading-tight"
           >
             Welcome back
           </h2>
           <p
-            style={{ color: "#64748B" }}
-            className="text-[13.5px] mt-1.5 font-normal leading-relaxed max-w-[340px]"
+            style={{
+              color: "#5B6B84",
+              fontSize: "13.5px",
+              marginTop: "8px",
+              lineHeight: 1.45,
+            }}
           >
-            Sign in to continue to the Community Centre Management System.
+            Sign in to continue to the Community<br />
+            Centre Management System.
           </p>
         </div>
 
@@ -121,9 +130,19 @@ export default function LoginForm({ className = "", hideCardBorderOnMobile = tru
           <div
             role="alert"
             aria-live="assertive"
-            className="p-3.5 rounded-[12px] bg-red-50 border border-error/30 text-error text-[13px] font-medium flex items-center gap-2.5 animate-fadeIn"
+            style={{
+              marginTop: "16px",
+              padding: "10px 14px",
+              borderRadius: "8px",
+              backgroundColor: "#FEF2F2",
+              border: "1px solid #FECACA",
+              color: "#DC2626",
+              fontSize: "12.5px",
+              fontWeight: 500,
+            }}
+            className="flex items-center gap-2 animate-fadeIn"
           >
-            <div className="w-2 h-2 rounded-full bg-error shrink-0" />
+            <div className="w-2 h-2 rounded-full bg-red-600 shrink-0" />
             <span>{authError}</span>
           </div>
         )}
@@ -132,13 +151,23 @@ export default function LoginForm({ className = "", hideCardBorderOnMobile = tru
         {forgotPasswordNotice && (
           <div
             role="status"
-            className="p-3.5 rounded-[12px] bg-[#FBF6EC] border border-light-gold text-navy text-[13px] font-medium flex items-center justify-between gap-2 animate-fadeIn"
+            style={{
+              marginTop: "16px",
+              padding: "10px 14px",
+              borderRadius: "8px",
+              backgroundColor: "#FFFBEB",
+              border: "1px solid #FDE68A",
+              color: "#92400E",
+              fontSize: "12px",
+              fontWeight: 500,
+            }}
+            className="flex items-center justify-between gap-2 animate-fadeIn"
           >
             <span>Please contact the Admin to reset your password.</span>
             <button
               type="button"
               onClick={() => setForgotPasswordNotice(false)}
-              className="text-muted hover:text-navy text-xs font-semibold px-2 py-1 rounded focus:outline-none focus:ring-2 focus:ring-light-gold cursor-pointer"
+              className="text-[#92400E] font-bold hover:underline text-[11px] cursor-pointer"
             >
               Dismiss
             </button>
@@ -146,11 +175,11 @@ export default function LoginForm({ className = "", hideCardBorderOnMobile = tru
         )}
 
         {/* User ID Field */}
-        <div>
+        <div style={{ marginTop: "24px" }}>
           <label
             htmlFor="userId"
-            style={{ color: "#0B224E" }}
-            className="block text-[13.5px] font-semibold mb-1.5"
+            style={{ color: "#061A3E", fontSize: "13px", fontWeight: 700 }}
+            className="block mb-1.5"
           >
             User ID
           </label>
@@ -175,30 +204,34 @@ export default function LoginForm({ className = "", hideCardBorderOnMobile = tru
               }}
               placeholder="Enter your user ID"
               aria-invalid={!!errors.userId}
-              aria-describedby={errors.userId ? "userId-error" : undefined}
               style={{
                 height: "48px",
-                borderRadius: "11px",
-                borderColor: errors.userId ? "#C62828" : "#DFCFA8",
-                borderWidth: "1.2px",
+                borderRadius: "10px",
+                border: errors.userId ? "1.5px solid #DC2626" : "1.5px solid #D6C5A2",
                 backgroundColor: "#FFFFFF",
+                paddingLeft: "42px",
+                paddingRight: "16px",
+                fontSize: "13.5px",
+                color: "#061A3E",
+                width: "100%",
+                transition: "all 0.15s ease",
               }}
-              className="w-full pl-10 pr-4 text-[14px] text-ink transition-all placeholder:text-[#9CA3AF] focus:outline-none focus:ring-2 focus:ring-light-gold focus:border-transparent hover:border-light-gold"
+              className="focus:outline-none focus:ring-2 focus:ring-[#E2B544] focus:border-transparent placeholder:text-[#94A3B8]"
             />
           </div>
           {errors.userId && (
-            <p id="userId-error" className="mt-1.5 text-[12px] text-error font-medium">
+            <p className="mt-1 text-[11.5px] text-red-600 font-medium">
               {errors.userId}
             </p>
           )}
         </div>
 
         {/* Password Field */}
-        <div>
+        <div style={{ marginTop: "16px" }}>
           <label
             htmlFor="password"
-            style={{ color: "#0B224E" }}
-            className="block text-[13.5px] font-semibold mb-1.5"
+            style={{ color: "#061A3E", fontSize: "13px", fontWeight: 700 }}
+            className="block mb-1.5"
           >
             Password
           </label>
@@ -222,21 +255,26 @@ export default function LoginForm({ className = "", hideCardBorderOnMobile = tru
               }}
               placeholder="Enter your password"
               aria-invalid={!!errors.password}
-              aria-describedby={errors.password ? "password-error" : undefined}
               style={{
                 height: "48px",
-                borderRadius: "11px",
-                borderColor: errors.password ? "#C62828" : "#DFCFA8",
-                borderWidth: "1.2px",
+                borderRadius: "10px",
+                border: errors.password ? "1.5px solid #DC2626" : "1.5px solid #D6C5A2",
                 backgroundColor: "#FFFFFF",
+                paddingLeft: "42px",
+                paddingRight: "44px",
+                fontSize: "13.5px",
+                color: "#061A3E",
+                width: "100%",
+                transition: "all 0.15s ease",
               }}
-              className="w-full pl-10 pr-11 text-[14px] text-ink transition-all placeholder:text-[#9CA3AF] focus:outline-none focus:ring-2 focus:ring-light-gold focus:border-transparent hover:border-light-gold"
+              className="focus:outline-none focus:ring-2 focus:ring-[#E2B544] focus:border-transparent placeholder:text-[#94A3B8]"
             />
             <button
               type="button"
               onClick={() => setShowPassword(!showPassword)}
               aria-label={showPassword ? "Hide password" : "Show password"}
-              className="absolute right-1 w-[44px] h-[44px] flex items-center justify-center text-[#64748B] hover:text-navy focus:outline-none focus:ring-2 focus:ring-light-gold rounded-lg transition-colors cursor-pointer"
+              style={{ width: "36px", height: "36px" }}
+              className="absolute right-2 flex items-center justify-center text-[#64748B] hover:text-[#061A3E] rounded transition-colors cursor-pointer"
             >
               {showPassword ? (
                 <EyeOff className="w-[18px] h-[18px]" aria-hidden="true" strokeWidth={1.8} />
@@ -246,38 +284,36 @@ export default function LoginForm({ className = "", hideCardBorderOnMobile = tru
             </button>
           </div>
           {errors.password && (
-            <p id="password-error" className="mt-1.5 text-[12px] text-error font-medium">
+            <p className="mt-1 text-[11.5px] text-red-600 font-medium">
               {errors.password}
             </p>
           )}
         </div>
 
         {/* Row: Checkbox "Remember Me" & link "Forgot password?" */}
-        <div className="flex items-center justify-between select-none pt-0.5">
-          <label className="flex items-center gap-2.5 cursor-pointer min-h-[44px] group">
+        <div className="flex items-center justify-between select-none mt-3.5">
+          <label className="flex items-center gap-2 cursor-pointer">
             <div
               onClick={() => setKeepMeSignedIn(!keepMeSignedIn)}
               style={{
-                width: "18px",
-                height: "18px",
+                width: "17px",
+                height: "17px",
                 borderRadius: "4px",
-                backgroundColor: keepMeSignedIn ? "#0B224E" : "#FFFFFF",
-                borderColor: keepMeSignedIn ? "#0B224E" : "#CBD5E1",
-                borderWidth: "1.5px",
-                borderStyle: "solid",
+                backgroundColor: keepMeSignedIn ? "#061A3E" : "#FFFFFF",
+                border: keepMeSignedIn ? "1.5px solid #061A3E" : "1.5px solid #CBD5E1",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
                 cursor: "pointer",
-                flexShrink: 0,
+                transition: "all 0.15s ease",
               }}
             >
               {keepMeSignedIn && (
-                <svg width="11" height="9" viewBox="0 0 11 9" fill="none">
+                <svg width="10" height="8" viewBox="0 0 11 9" fill="none">
                   <path
                     d="M1.5 4.5L4 7L9.5 1.5"
                     stroke="white"
-                    strokeWidth="2"
+                    strokeWidth="2.2"
                     strokeLinecap="round"
                     strokeLinejoin="round"
                   />
@@ -285,17 +321,18 @@ export default function LoginForm({ className = "", hideCardBorderOnMobile = tru
               )}
             </div>
             <span
-              style={{ color: "#334155" }}
-              className="text-[13px] font-medium whitespace-nowrap"
+              style={{ color: "#061A3E", fontSize: "13px", fontWeight: 600 }}
+              className="whitespace-nowrap"
             >
               Remember Me
             </span>
           </label>
+
           <button
             type="button"
             onClick={() => setForgotPasswordNotice(true)}
-            style={{ color: "#2563EB" }}
-            className="text-[13px] font-normal hover:underline focus:outline-none focus:ring-2 focus:ring-light-gold rounded px-1 py-2 min-h-[44px] flex items-center transition-colors cursor-pointer whitespace-nowrap"
+            style={{ color: "#2563EB", fontSize: "12.5px", fontWeight: 500 }}
+            className="hover:underline transition-colors cursor-pointer whitespace-nowrap"
           >
             Forgot password?
           </button>
@@ -306,37 +343,26 @@ export default function LoginForm({ className = "", hideCardBorderOnMobile = tru
           type="submit"
           disabled={isLoading}
           style={{
-            height: "50px",
-            backgroundColor: "#08204D",
-            borderRadius: "11px",
+            height: "48px",
+            backgroundColor: "#061A3E",
+            borderRadius: "10px",
             color: "#FFFFFF",
+            fontSize: "15px",
+            fontWeight: 700,
+            marginTop: "20px",
+            border: "none",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: "8px",
+            boxShadow: "0 2px 4px rgba(6, 26, 62, 0.25)",
+            cursor: "pointer",
+            transition: "all 0.15s ease",
           }}
-          className="w-full text-[15.5px] font-semibold flex items-center justify-center gap-2 shadow-sm hover:bg-[#0B2A5B] active:scale-[0.99] focus:outline-none focus:ring-2 focus:ring-light-gold focus:ring-offset-2 transition-all disabled:opacity-75 disabled:cursor-not-allowed group cursor-pointer mt-1"
+          className="hover:bg-[#0B2A5B] active:scale-[0.99] disabled:opacity-75 cursor-pointer group"
         >
           {isLoading ? (
-            <div className="flex items-center justify-center gap-2">
-              <svg
-                className="animate-spin h-5 w-5 text-white"
-                xmlns="http://www.w3.org/2000/svg"
-                fill="none"
-                viewBox="0 0 24 24"
-              >
-                <circle
-                  className="opacity-25"
-                  cx="12"
-                  cy="12"
-                  r="10"
-                  stroke="currentColor"
-                  strokeWidth="4"
-                ></circle>
-                <path
-                  className="opacity-75"
-                  fill="currentColor"
-                  d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                ></path>
-              </svg>
-              <span>Signing in…</span>
-            </div>
+            <span>Signing in…</span>
           ) : (
             <>
               <span>Login</span>
@@ -345,27 +371,17 @@ export default function LoginForm({ className = "", hideCardBorderOnMobile = tru
           )}
         </button>
 
-        {/* Subtle Horizontal Divider as in Mockup */}
-        <div style={{ height: "1px", backgroundColor: "#EDE5D6", margin: "14px 0 6px" }} />
-
-        {/* Footer line inside card */}
+        {/* Footer line: Secure session · Role-based access */}
         <div
-          style={{ color: "#64748B" }}
-          className="flex items-center justify-center gap-1.5 text-[12.5px] font-normal"
+          style={{ color: "#64748B", fontSize: "12px", marginTop: "22px" }}
+          className="flex items-center justify-center gap-1.5"
         >
           <ShieldCheck
-            style={{ color: "#16A34A" }}
+            style={{ color: "#059669" }}
             className="w-4 h-4 shrink-0"
             aria-hidden="true"
           />
           <span>Secure session · Role-based access</span>
-        </div>
-
-        {/* Quick Demo Helper Hint */}
-        <div className="mt-0.5 text-center">
-          <p style={{ color: "#94A3B8", fontSize: "11px" }}>
-            Demo: <strong style={{ color: "#0B224E" }}>manager</strong> / manager123 &bull; <strong style={{ color: "#0B224E" }}>admin</strong> / admin123
-          </p>
         </div>
       </form>
     </div>

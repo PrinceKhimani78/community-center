@@ -34,9 +34,7 @@ async function capture() {
         targets = await res.json();
         break;
       }
-    } catch {
-      // Chrome still starting
-    }
+    } catch {}
   }
 
   let target = targets.find((t) => t.type === "page");
@@ -78,27 +76,12 @@ async function capture() {
 
   await send("Network.enable");
   await send("Page.enable");
-  await send("Network.clearBrowserCookies");
 
   console.log("Navigating to http://localhost:3000/login...");
   await send("Page.navigate", { url: "http://localhost:3000/login" });
 
-  await sleep(3000);
+  await sleep(2500);
 
-  // Hide dev overlay icon
-  try {
-    await send("Runtime.evaluate", {
-      expression: `
-        const style = document.createElement('style');
-        style.innerHTML = 'nextjs-portal, [data-nextjs-toast], [data-nextjs-dev-tools-button] { display: none !important; }';
-        document.head.appendChild(style);
-      `
-    });
-  } catch (e) {
-    // ignore
-  }
-
-  // 1. Desktop Screenshot (1440x900)
   console.log("Setting viewport to 1440x900...");
   await send("Emulation.setDeviceMetricsOverride", {
     width: 1440,
@@ -114,9 +97,8 @@ async function capture() {
   });
   const desktopPath = path.resolve("./login_desktop.png");
   fs.writeFileSync(desktopPath, Buffer.from(desktopResult.data, "base64"));
-  console.log("Saved:", desktopPath);
+  console.log("Saved desktop screenshot:", desktopPath);
 
-  // 2. Mobile Screenshot (390x844)
   console.log("Setting viewport to 390x844 (mobile)...");
   await send("Emulation.setDeviceMetricsOverride", {
     width: 390,
@@ -126,34 +108,20 @@ async function capture() {
   });
   await sleep(1000);
 
-  const evalRes = await send("Runtime.evaluate", {
-    expression: "document.documentElement.scrollHeight",
-  });
-  const scrollHeight = (evalRes && evalRes.result && evalRes.result.value) || 1000;
-
-  await send("Emulation.setDeviceMetricsOverride", {
-    width: 390,
-    height: scrollHeight,
-    deviceScaleFactor: 2,
-    mobile: true,
-  });
-  await sleep(800);
-
-  console.log(`Capturing mobile login screenshot (390x${scrollHeight})...`);
+  console.log("Capturing mobile login screenshot (390x844)...");
   const mobileResult = await send("Page.captureScreenshot", {
     format: "png",
-    captureBeyondViewport: true,
   });
   const mobilePath = path.resolve("./login_mobile.png");
   fs.writeFileSync(mobilePath, Buffer.from(mobileResult.data, "base64"));
-  console.log("Saved:", mobilePath);
+  console.log("Saved mobile screenshot:", mobilePath);
 
   ws.close();
   chromeProcess.kill();
-  console.log("Screenshots captured successfully!");
+  console.log("Done!");
 }
 
 capture().catch((err) => {
-  console.error("Screenshot error:", err);
+  console.error("Capture error:", err);
   process.exit(1);
 });

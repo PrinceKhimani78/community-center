@@ -86,49 +86,56 @@ export default function ComingUp() {
                 borderRadius: "8px",
                 padding: "10px 8px",
                 margin: "0 -8px",
-                transition: "background-color 0.15s ease",
               }}
-              className="flex items-center justify-between gap-3 group hover:bg-slate-50 cursor-pointer"
+              className="flex items-center justify-between gap-3 group coming-up-item cursor-pointer"
             >
               <div className="flex items-center gap-3 min-w-0">
-                {/* Modern Date Tile */}
+                {/* Executive Calendar Tile with Navy Top and Gold text */}
                 <div
                   style={{
                     width: "42px",
-                    height: "44px",
-                    backgroundColor: "#F8FAFC",
-                    border: "1px solid #E2E8F0",
+                    height: "46px",
+                    backgroundColor: "#FFFFFF",
+                    border: "1px solid #CBD5E1",
                     borderRadius: "8px",
                     display: "flex",
                     flexDirection: "column",
                     alignItems: "center",
-                    justifyContent: "center",
+                    justifyContent: "space-between",
+                    overflow: "hidden",
                     flexShrink: 0,
-                    lineHeight: 1,
+                    boxShadow: "0 1px 2px rgba(11, 42, 91, 0.06)",
                     userSelect: "none",
                   }}
-                  className="shadow-2xs"
+                  className="group-hover:border-[#E2B544] group-hover:shadow-sm transition-all"
                 >
-                  <span
+                  <div
                     style={{
-                      color: "#0B2A5B",
-                      fontSize: "14px",
+                      width: "100%",
+                      backgroundColor: "#0B2A5B",
+                      color: "#E2B544",
+                      fontSize: "9px",
                       fontWeight: 800,
-                    }}
-                  >
-                    {booking.day}
-                  </span>
-                  <span
-                    style={{
-                      color: "#64748B",
-                      fontSize: "9.5px",
-                      fontWeight: 700,
-                      marginTop: "3px",
-                      letterSpacing: "0.05em",
+                      textAlign: "center",
+                      padding: "2px 0",
+                      letterSpacing: "0.06em",
+                      textTransform: "uppercase",
+                      lineHeight: 1.2,
                     }}
                   >
                     {booking.month}
-                  </span>
+                  </div>
+                  <div
+                    style={{
+                      color: "#0B2A5B",
+                      fontSize: "15px",
+                      fontWeight: 800,
+                      paddingBottom: "4px",
+                      lineHeight: 1,
+                    }}
+                  >
+                    {booking.day}
+                  </div>
                 </div>
 
                 {/* Event Name + Details */}
