@@ -33,8 +33,9 @@
   --error: #C62828;
 }
 
+html,
 body {
-  background-color: #F8FAFC;
+  background-color: #F8FAFC !important;
   color: #14213D;
   font-family: var(--font-poppins), 'Poppins', system-ui, -apple-system, sans-serif;
   -webkit-font-smoothing: antialiased;

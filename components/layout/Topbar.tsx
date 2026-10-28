@@ -26,50 +26,93 @@ export default function Topbar({ title = "Dashboard", breadcrumb = "Home" }: Top
   const userRoleTitle = isManager ? "Centre Manager" : "Trustee / Admin";
 
   return (
-    <header className="h-[64px] bg-white border-b border-slate-200 sticky top-0 z-20 px-4 sm:px-6 lg:px-8 flex items-center justify-between gap-4">
-      {/* Left: Mobile Menu Button + Title / Breadcrumb */}
+    <header
+      style={{
+        height: "60px",
+        backgroundColor: "#FFFFFF",
+        borderBottom: "1px solid #E2E8F0",
+        position: "sticky",
+        top: 0,
+        zIndex: 20,
+        padding: "0 24px",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+        gap: "16px",
+      }}
+    >
+      {/* Left: Mobile Menu Button + Breadcrumb */}
       <div className="flex items-center gap-3 min-w-0">
         <button
           type="button"
           onClick={toggleMobileSidebar}
-          className="lg:hidden p-1.5 rounded-lg text-navy hover:bg-slate-100 border border-slate-200 flex items-center justify-center cursor-pointer"
+          style={{
+            padding: "6px",
+            borderRadius: "6px",
+            border: "1px solid #E2E8F0",
+            backgroundColor: "#F8FAFC",
+            color: "#0B2A5B",
+          }}
+          className="lg:hidden flex items-center justify-center cursor-pointer"
           aria-label="Open navigation menu"
         >
           <Menu className="w-5 h-5" />
         </button>
 
-        <div className="flex flex-col justify-center min-w-0">
-          <span className="text-[11px] text-slate-500 font-medium leading-none">{breadcrumb}</span>
-          <h2 className="text-[17px] font-bold text-navy leading-tight mt-0.5 tracking-tight truncate">
+        <div className="flex items-center gap-1.5 select-none min-w-0">
+          <span
+            style={{ color: "#64748B", fontSize: "13px", fontWeight: 500 }}
+            className="hidden sm:inline"
+          >
+            {breadcrumb}
+          </span>
+          <span style={{ color: "#CBD5E1", fontSize: "12px" }} className="hidden sm:inline">
+            /
+          </span>
+          <h1
+            style={{
+              color: "#0B2A5B",
+              fontSize: "15px",
+              fontWeight: 700,
+              fontFamily: "var(--font-poppins)",
+            }}
+            className="tracking-tight truncate"
+          >
             {title}
-          </h2>
+          </h1>
         </div>
       </div>
 
-      {/* Right items: Search, Date Chip, Bell, Profile */}
-      <div className="flex items-center gap-2 sm:gap-3">
+      {/* Right: Search, Date Chip, Bell, User Profile */}
+      <div className="flex items-center gap-2 sm:gap-3 shrink-0">
         {/* Search box - Desktop */}
         <div
-          style={{ position: "relative", width: "320px" }}
+          style={{ position: "relative", width: "290px" }}
           className="hidden md:flex items-center"
         >
           <Search
-            style={{ position: "absolute", left: "12px", color: "#64748B", pointerEvents: "none" }}
+            style={{
+              position: "absolute",
+              left: "11px",
+              top: "50%",
+              transform: "translateY(-50%)",
+              color: "#94A3B8",
+              pointerEvents: "none",
+            }}
             className="w-3.5 h-3.5"
           />
           <input
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search applicant, booking or receipt no."
+            placeholder="Search bookings, receipts..."
             style={{
               height: "36px",
               paddingLeft: "34px",
-              paddingRight: "56px",
+              paddingRight: "54px",
               backgroundColor: "#F8FAFC",
-              borderColor: "#E2E8F0",
-              borderWidth: "1px",
-              borderRadius: "9999px",
+              border: "1px solid #E2E8F0",
+              borderRadius: "8px",
               fontSize: "12.5px",
               color: "#0B2A5B",
               width: "100%",
@@ -80,16 +123,18 @@ export default function Topbar({ title = "Dashboard", breadcrumb = "Home" }: Top
             style={{
               position: "absolute",
               right: "8px",
+              top: "50%",
+              transform: "translateY(-50%)",
               backgroundColor: "#FFFFFF",
-              borderColor: "#CBD5E1",
-              borderWidth: "1px",
+              border: "1px solid #E2E8F0",
               fontSize: "10px",
               color: "#64748B",
               padding: "1.5px 5px",
               borderRadius: "4px",
               pointerEvents: "none",
+              fontWeight: 600,
             }}
-            className="font-medium shadow-2xs"
+            className="shadow-2xs"
           >
             Ctrl K
           </span>
@@ -103,27 +148,31 @@ export default function Topbar({ title = "Dashboard", breadcrumb = "Home" }: Top
             width: "36px",
             height: "36px",
             backgroundColor: "#F8FAFC",
-            borderColor: "#E2E8F0",
-            borderWidth: "1px",
+            border: "1px solid #E2E8F0",
+            borderRadius: "8px",
           }}
-          className="md:hidden rounded-full flex items-center justify-center text-navy hover:bg-slate-100"
+          className="md:hidden flex items-center justify-center text-navy hover:bg-slate-100 cursor-pointer"
           aria-label="Search"
         >
           <Search className="w-4 h-4 text-navy" />
         </button>
 
-        {/* Date chip */}
+        {/* Date chip (hidden on mobile, visible on sm and up) */}
         <div
           style={{
-            backgroundColor: "#FFF9EA",
-            borderColor: "rgba(226, 181, 68, 0.4)",
-            borderWidth: "1px",
-            color: "#8A6510",
+            backgroundColor: "#F8FAFC",
+            border: "1px solid #E2E8F0",
+            borderRadius: "8px",
+            padding: "6px 12px",
+            color: "#475569",
+            fontSize: "12.5px",
+            fontWeight: 500,
+            userSelect: "none",
           }}
-          className="hidden sm:flex items-center gap-1.5 px-3 py-1 rounded-full select-none shadow-2xs"
+          className="hidden sm:flex items-center gap-1.5 shrink-0"
         >
-          <Calendar className="w-3.5 h-3.5 text-[#8A6510] shrink-0" />
-          <span className="text-[12px] font-medium whitespace-nowrap">Tue, 20 Oct 2026</span>
+          <Calendar className="w-3.5 h-3.5" style={{ color: "#0B2A5B" }} />
+          <span>Tue, 20 Oct 2026</span>
         </div>
 
         {/* Bell Button with red count bubble */}
@@ -133,24 +182,37 @@ export default function Topbar({ title = "Dashboard", breadcrumb = "Home" }: Top
             width: "36px",
             height: "36px",
             backgroundColor: "#F8FAFC",
-            borderColor: "#E2E8F0",
-            borderWidth: "1px",
+            border: "1px solid #E2E8F0",
+            borderRadius: "8px",
             position: "relative",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            color: "#0B2A5B",
           }}
-          className="rounded-full hover:bg-slate-100 flex items-center justify-center text-navy transition-colors shrink-0"
+          className="hover:bg-slate-100 transition-colors shrink-0"
           aria-label="Notifications"
         >
-          <Bell className="w-4 h-4 text-navy" />
+          <Bell className="w-4 h-4" />
           {actionCount > 0 && (
             <span
               style={{
                 position: "absolute",
-                top: "-3px",
-                right: "-3px",
+                top: "-4px",
+                right: "-4px",
                 backgroundColor: "#DC2626",
                 color: "#FFFFFF",
+                fontSize: "9.5px",
+                fontWeight: 700,
+                height: "17px",
+                minWidth: "17px",
+                padding: "0 4px",
+                borderRadius: "9999px",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                boxShadow: "0 1px 2px rgba(0,0,0,0.15)",
               }}
-              className="h-4 min-w-4 px-1 rounded-full text-[9.5px] font-bold flex items-center justify-center shadow-xs"
             >
               {actionCount}
             </span>
@@ -158,25 +220,32 @@ export default function Topbar({ title = "Dashboard", breadcrumb = "Home" }: Top
         </Link>
 
         {/* User Profile Avatar & Info */}
-        <div className="flex items-center gap-2 pl-1 sm:pl-1.5">
+        <div
+          style={{ paddingLeft: "8px", borderLeft: "1px solid #E2E8F0" }}
+          className="flex items-center gap-2.5"
+        >
           <div
             style={{
-              width: "36px",
-              height: "36px",
+              width: "34px",
+              height: "34px",
               backgroundColor: "#0B2A5B",
-              borderColor: "rgba(226, 181, 68, 0.4)",
-              borderWidth: "1px",
+              borderRadius: "8px",
               color: "#FFFFFF",
+              fontWeight: 700,
+              fontSize: "12px",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              boxShadow: "0 1px 2px rgba(11, 42, 91, 0.2)",
             }}
-            className="rounded-full font-bold text-[13px] flex items-center justify-center shrink-0 shadow-xs"
           >
             {userInitials}
           </div>
-          <div className="hidden xl:flex flex-col justify-center text-left leading-tight">
-            <span style={{ color: "#0B2A5B" }} className="text-[13px] font-bold">
+          <div className="hidden xl:flex flex-col leading-tight text-left">
+            <span style={{ color: "#0B2A5B", fontSize: "13px", fontWeight: 700 }}>
               {userName}
             </span>
-            <span style={{ color: "#64748B" }} className="text-[11px]">
+            <span style={{ color: "#64748B", fontSize: "11px", fontWeight: 500 }}>
               {userRoleTitle}
             </span>
           </div>
@@ -185,15 +254,41 @@ export default function Topbar({ title = "Dashboard", breadcrumb = "Home" }: Top
 
       {/* Expandable Mobile Search Field */}
       {isMobileSearchOpen && (
-        <div className="absolute top-[64px] left-0 right-0 p-3 bg-white border-b border-slate-200 shadow-md md:hidden z-20 flex items-center gap-2">
+        <div
+          style={{
+            position: "absolute",
+            top: "60px",
+            left: 0,
+            right: 0,
+            padding: "12px",
+            backgroundColor: "#FFFFFF",
+            borderBottom: "1px solid #E2E8F0",
+            boxShadow: "0 4px 6px -1px rgba(0, 0, 0, 0.05)",
+            zIndex: 20,
+            display: "flex",
+            alignItems: "center",
+            gap: "8px",
+          }}
+          className="md:hidden"
+        >
           <Search className="w-4 h-4 text-slate-400 ml-2" />
           <input
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search applicant, booking or receipt no."
+            placeholder="Search bookings, receipts..."
             autoFocus
-            className="flex-1 h-[36px] px-3 rounded-lg bg-slate-50 border border-slate-200 text-[13px] text-navy focus:outline-none focus:ring-2 focus:ring-[#E2B544]"
+            style={{
+              flex: 1,
+              height: "36px",
+              padding: "0 12px",
+              borderRadius: "8px",
+              backgroundColor: "#F8FAFC",
+              border: "1px solid #E2E8F0",
+              fontSize: "13px",
+              color: "#0B2A5B",
+            }}
+            className="focus:outline-none focus:ring-2 focus:ring-[#E2B544]"
           />
         </div>
       )}

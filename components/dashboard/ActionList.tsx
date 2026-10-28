@@ -2,16 +2,16 @@
 
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
-import { CheckCircle2, RotateCcw } from "lucide-react";
+import { CheckCircle2, RotateCcw, AlertTriangle, ArrowRight } from "lucide-react";
 import { useDashboard } from "@/lib/context/DashboardContext";
 import { ActionTag } from "@/lib/mock/dashboard";
 
-const TAG_STYLES: Record<ActionTag, { bg: string; text: string }> = {
-  PAY: { bg: "bg-[#FDECEC]", text: "text-[#7F1D1D]" },
-  INS: { bg: "bg-[#FDEEE3]", text: "text-[#9A3412]" },
-  REF: { bg: "bg-[#E8EFFC]", text: "text-[#1E3A8A]" },
-  BK: { bg: "bg-[#E8F5EC]", text: "text-[#14532D]" },
-  FIX: { bg: "bg-[#F0EAFB]", text: "text-[#4C1D95]" },
+const TAG_CONFIG: Record<ActionTag, { bg: string; text: string; border: string }> = {
+  PAY: { bg: "#FEF2F2", text: "#DC2626", border: "#FEE2E2" },
+  INS: { bg: "#FFFBEB", text: "#D97706", border: "#FEF3C7" },
+  REF: { bg: "#EFF6FF", text: "#2563EB", border: "#DBEAFE" },
+  BK: { bg: "#F0FDF4", text: "#16A34A", border: "#DCFCE7" },
+  FIX: { bg: "#FAF5FF", text: "#9333EA", border: "#F3E8FF" },
 };
 
 export default function ActionList() {
@@ -27,7 +27,6 @@ export default function ActionList() {
     return () => window.removeEventListener("resize", checkMobile);
   }, []);
 
-  // Show top 3 on phones, top 4 on tablet/desktop
   const maxDisplay = isMobile ? 3 : 4;
   const displayedItems = actionItems.slice(0, maxDisplay);
 
@@ -40,17 +39,40 @@ export default function ActionList() {
         borderRadius: "12px",
         boxShadow: "0 1px 3px rgba(0,0,0,0.03)",
       }}
-      className="p-3.5 sm:p-4 flex flex-col justify-between"
+      className="p-4 sm:p-5 flex flex-col justify-between"
     >
       {/* Header */}
-      <div style={{ borderBottom: "1px solid #F1F5F9" }} className="flex items-center justify-between pb-2.5">
-        <h3 style={{ color: "#0B2A5B" }} className="text-[15.5px] font-bold tracking-tight">Needs your action</h3>
+      <div
+        style={{ borderBottom: "1px solid #F1F5F9", paddingBottom: "14px" }}
+        className="flex items-center justify-between"
+      >
+        <div className="flex items-center gap-2.5">
+          <h2
+            style={{ color: "#0B2A5B", fontSize: "16px", fontWeight: 700 }}
+            className="tracking-tight"
+          >
+            Needs your action
+          </h2>
+          <span
+            style={{
+              backgroundColor: "#FEE2E2",
+              color: "#DC2626",
+              fontSize: "11px",
+              fontWeight: 700,
+              padding: "1.5px 7px",
+              borderRadius: "9999px",
+            }}
+          >
+            {actionItems.length}
+          </span>
+        </div>
         <Link
           href="/notifications"
-          style={{ color: "#0B2A5B" }}
-          className="text-[12px] font-semibold hover:text-[#C9971C] hover:underline"
+          style={{ color: "#0B2A5B", fontSize: "12.5px", fontWeight: 600 }}
+          className="hover:underline flex items-center gap-1 transition-colors"
         >
-          See all
+          <span>See all</span>
+          <ArrowRight className="w-3.5 h-3.5" />
         </Link>
       </div>
 
@@ -59,16 +81,26 @@ export default function ActionList() {
         <div
           role="status"
           aria-live="polite"
-          className="mt-3 p-2.5 rounded-[10px] bg-[#E8F5EC] border border-[#A7E3B6] flex items-center justify-between gap-2 text-[12px] text-[#14532D] animate-in fade-in duration-150"
+          style={{
+            marginTop: "12px",
+            padding: "10px 14px",
+            borderRadius: "8px",
+            backgroundColor: "#F0FDF4",
+            border: "1px solid #BBF7D0",
+            color: "#166534",
+            fontSize: "12.5px",
+          }}
+          className="flex items-center justify-between gap-2 animate-in fade-in duration-150"
         >
           <div className="flex items-center gap-2 min-w-0">
-            <CheckCircle2 className="w-4 h-4 text-[#15803D] shrink-0" />
+            <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
             <span className="font-medium truncate">{lastCompleted.message}</span>
           </div>
           <button
             type="button"
             onClick={undoAction}
-            className="flex items-center gap-1 font-bold text-[#14532D] hover:underline shrink-0 text-[11.5px] px-2 py-0.5 rounded hover:bg-[#d5eedc] cursor-pointer"
+            style={{ color: "#166534" }}
+            className="flex items-center gap-1 font-bold hover:underline shrink-0 text-[11.5px] px-2 py-0.5 rounded hover:bg-emerald-100 cursor-pointer"
           >
             <RotateCcw className="w-3 h-3" />
             <span>Undo</span>
@@ -77,49 +109,72 @@ export default function ActionList() {
       )}
 
       {/* Action Items List */}
-      <div className="mt-3 space-y-2.5">
+      <div className="mt-3.5 space-y-2.5">
         {displayedItems.length === 0 ? (
-          <div className="py-8 px-4 text-center">
-            <p style={{ color: "#64748B" }} className="text-[13px] font-medium">
-              All caught up. Nothing is waiting for you.
+          <div className="py-10 px-4 text-center">
+            <p style={{ color: "#64748B", fontSize: "13px" }} className="font-medium">
+              All caught up! No actions currently pending.
             </p>
           </div>
         ) : (
           displayedItems.map((item) => {
-            const tagStyle = TAG_STYLES[item.tag] || TAG_STYLES.PAY;
+            const tagCfg = TAG_CONFIG[item.tag] || TAG_CONFIG.PAY;
 
             return (
               <div
                 key={item.id}
                 style={{
-                  backgroundColor: "#F8FAFC",
+                  backgroundColor: "#FFFFFF",
                   borderColor: "#E2E8F0",
                   borderWidth: "1px",
                   borderRadius: "10px",
+                  padding: "12px 14px",
+                  boxShadow: "0 1px 2px rgba(0,0,0,0.02)",
+                  transition: "all 0.15s ease",
                 }}
-                className="p-2.5 sm:p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 transition-all duration-150 hover:border-[#E2B544]/70"
+                className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:border-[#CBD5E1] hover:bg-slate-50/50"
               >
                 {/* Left: Tag + Title + Detail */}
                 <div className="flex items-center gap-3 min-w-0">
-                  {/* 36px square type tag */}
+                  {/* Tag badge */}
                   <div
-                    className={`w-[36px] h-[36px] rounded-[8px] ${tagStyle.bg} ${tagStyle.text} font-bold text-[11px] flex items-center justify-center shrink-0 tracking-wider shadow-2xs`}
+                    style={{
+                      width: "36px",
+                      height: "36px",
+                      borderRadius: "8px",
+                      backgroundColor: tagCfg.bg,
+                      color: tagCfg.text,
+                      border: `1px solid ${tagCfg.border}`,
+                      fontWeight: 800,
+                      fontSize: "11px",
+                      letterSpacing: "0.05em",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      flexShrink: 0,
+                    }}
                   >
                     {item.tag}
                   </div>
 
                   {/* Text details */}
                   <div className="min-w-0 flex-1">
-                    <h4 style={{ color: "#0B2A5B" }} className="text-[13.5px] font-bold truncate leading-snug">
+                    <h3
+                      style={{ color: "#0B2A5B", fontSize: "14px", fontWeight: 700 }}
+                      className="truncate leading-snug"
+                    >
                       {item.title}
-                    </h4>
-                    <p style={{ color: "#64748B" }} className="text-[12px] truncate mt-0.5 leading-normal">
+                    </h3>
+                    <p
+                      style={{ color: "#64748B", fontSize: "12px" }}
+                      className="truncate mt-0.5 leading-normal"
+                    >
                       {item.detail}
                     </p>
                   </div>
                 </div>
 
-                {/* Right: One navy button, 34px tall */}
+                {/* Right: Action button */}
                 <button
                   type="button"
                   onClick={() => completeAction(item.id)}
@@ -127,9 +182,16 @@ export default function ActionList() {
                     backgroundColor: "#0B2A5B",
                     color: "#FFFFFF",
                     height: "34px",
-                    borderRadius: "8px",
+                    padding: "0 14px",
+                    borderRadius: "6px",
+                    fontSize: "12px",
+                    fontWeight: 600,
+                    border: "none",
+                    cursor: "pointer",
+                    boxShadow: "0 1px 2px rgba(11, 42, 91, 0.15)",
+                    transition: "all 0.15s ease",
                   }}
-                  className="px-3.5 text-[12px] font-semibold hover:bg-[#123B7C] transition-all flex items-center justify-center shrink-0 cursor-pointer focus:outline-none focus:ring-2 focus:ring-[#E2B544] w-full sm:w-auto shadow-2xs active:scale-[0.98]"
+                  className="hover:opacity-90 active:scale-[0.98] shrink-0 whitespace-nowrap w-full sm:w-auto flex items-center justify-center"
                 >
                   {item.buttonLabel}
                 </button>

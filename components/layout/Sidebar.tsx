@@ -209,7 +209,7 @@ export default function Sidebar() {
       </div>
 
       {/* Bottom: Logout */}
-      <div className="pt-3 mt-4 border-t border-white/10">
+      <div style={{ paddingBottom: "28px" }} className="pt-3 mt-4 border-t border-white/10">
         <button
           type="button"
           onClick={handleLogout}
