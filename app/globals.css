@@ -35,7 +35,7 @@
 
 html,
 body {
-  background-color: #F6F8FC !important;
+  background-color: #FAF5EB !important;
   color: #14213D;
   font-family: var(--font-poppins), 'Poppins', system-ui, -apple-system, sans-serif;
   -webkit-font-smoothing: antialiased;
@@ -120,7 +120,7 @@ body {
 }
 .coming-up-item:hover {
   transform: translateX(5px);
-  background-color: #F8FAFC !important;
+  background-color: #FAF6EF !important;
 }
 
 /* Hide scrollbars */

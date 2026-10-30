@@ -36,21 +36,22 @@ export default function ComingUp() {
     <div
       style={{
         backgroundColor: "#FFFFFF",
-        border: "1px solid #E2E8F0",
-        borderRadius: "12px",
-        boxShadow: "0 1px 3px rgba(15, 23, 42, 0.04)",
+        border: "1.5px solid rgba(226, 181, 68, 0.32)",
+        borderRadius: "18px",
+        boxShadow: "0 10px 28px -4px rgba(11, 42, 91, 0.05), 0 3px 10px rgba(226, 181, 68, 0.07)",
+        padding: "24px",
       }}
-      className="p-4 sm:p-5 flex flex-col justify-between"
+      className="flex flex-col justify-between"
     >
       {/* Header */}
       <div
-        style={{ borderBottom: "1px solid #F1F5F9" }}
-        className="flex items-center justify-between pb-3 mb-2"
+        style={{ borderBottom: "1px solid #F1ECE1", paddingBottom: "16px" }}
+        className="flex items-center justify-between mb-3"
       >
-        <div className="flex items-center gap-2">
-          <CalendarDays className="w-4 h-4" style={{ color: "#0B2A5B" }} />
+        <div className="flex items-center gap-2.5">
+          <CalendarDays className="w-4 h-4 text-[#C9971C]" />
           <h3
-            style={{ color: "#0B2A5B", fontSize: "15px", fontWeight: 700 }}
+            style={{ color: "#0B2A5B", fontSize: "17px", fontWeight: 700 }}
             className="tracking-tight"
           >
             Coming up
@@ -59,22 +60,22 @@ export default function ComingUp() {
         <Link
           href="/calendar"
           style={{
-            color: "#0B2A5B",
-            fontSize: "12.5px",
+            color: "#C9971C",
+            fontSize: "13px",
             fontWeight: 600,
             display: "inline-flex",
             alignItems: "center",
             gap: "4px",
           }}
-          className="hover:underline hover:text-amber-600 transition-colors"
+          className="hover:underline transition-colors group"
         >
           <span>Full calendar</span>
-          <ArrowRight className="w-3.5 h-3.5" />
+          <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform" />
         </Link>
       </div>
 
-      {/* 5 Rows */}
-      <div className="divide-y divide-slate-100">
+      {/* 5 Rows with airy spacing */}
+      <div className="space-y-1.5">
         {UPCOMING_BOOKINGS.map((booking) => {
           const badge = STATUS_BADGES[booking.status] || STATUS_BADGES.Confirmed;
 
@@ -83,20 +84,19 @@ export default function ComingUp() {
               key={booking.id}
               href={`/bookings/${booking.receiptNo}`}
               style={{
-                borderRadius: "8px",
-                padding: "10px 8px",
-                margin: "0 -8px",
+                borderRadius: "10px",
+                padding: "10px 12px",
               }}
-              className="flex items-center justify-between gap-3 group coming-up-item cursor-pointer"
+              className="flex items-center justify-between gap-3 group hover:bg-[#FAF6EF] transition-all duration-150 cursor-pointer"
             >
-              <div className="flex items-center gap-3 min-w-0">
+              <div className="flex items-center gap-3.5 min-w-0 flex-1">
                 {/* Executive Calendar Tile with Navy Top and Gold text */}
                 <div
                   style={{
                     width: "42px",
                     height: "46px",
                     backgroundColor: "#FFFFFF",
-                    border: "1px solid #CBD5E1",
+                    border: "1px solid rgba(226, 181, 68, 0.4)",
                     borderRadius: "8px",
                     display: "flex",
                     flexDirection: "column",
@@ -104,7 +104,7 @@ export default function ComingUp() {
                     justifyContent: "space-between",
                     overflow: "hidden",
                     flexShrink: 0,
-                    boxShadow: "0 1px 2px rgba(11, 42, 91, 0.06)",
+                    boxShadow: "0 2px 4px rgba(11, 42, 91, 0.06)",
                     userSelect: "none",
                   }}
                   className="group-hover:border-[#E2B544] group-hover:shadow-sm transition-all"
@@ -143,22 +143,22 @@ export default function ComingUp() {
                   <h4
                     style={{
                       color: "#0B2A5B",
-                      fontSize: "13.5px",
+                      fontSize: "14px",
                       fontWeight: 700,
-                      lineHeight: 1.3,
+                      lineHeight: 1.35,
                     }}
-                    className="truncate group-hover:text-blue-900"
+                    className="group-hover:text-blue-900 transition-colors"
                   >
                     {booking.title}
                   </h4>
                   <p
                     style={{
-                      color: "#64748B",
-                      fontSize: "11.5px",
+                      color: "#78716C",
+                      fontSize: "12px",
                       marginTop: "2px",
                       lineHeight: 1.2,
                     }}
-                    className="truncate"
+                    className="truncate font-medium"
                   >
                     {booking.applicant} · {booking.hall}
                   </p>
@@ -191,3 +191,4 @@ export default function ComingUp() {
     </div>
   );
 }
+

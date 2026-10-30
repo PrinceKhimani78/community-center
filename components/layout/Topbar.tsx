@@ -29,8 +29,8 @@ export default function Topbar({ title = "Dashboard", breadcrumb = "Home" }: Top
     <header
       style={{
         height: "60px",
-        backgroundColor: "#FFFFFF",
-        borderBottom: "1px solid #E2E8F0",
+        backgroundColor: "#FAF5EB",
+        borderBottom: "1px solid rgba(226, 181, 68, 0.28)",
         position: "sticky",
         top: 0,
         zIndex: 20,
@@ -49,11 +49,11 @@ export default function Topbar({ title = "Dashboard", breadcrumb = "Home" }: Top
           style={{
             padding: "6px",
             borderRadius: "6px",
-            border: "1px solid #E2E8F0",
-            backgroundColor: "#F8FAFC",
+            border: "1px solid rgba(226, 181, 68, 0.3)",
+            backgroundColor: "#FFFFFF",
             color: "#0B2A5B",
           }}
-          className="lg:hidden flex items-center justify-center cursor-pointer"
+          className="lg:hidden flex items-center justify-center cursor-pointer hover:border-[#E2B544] transition-colors"
           aria-label="Open navigation menu"
         >
           <Menu className="w-5 h-5" />
@@ -61,12 +61,12 @@ export default function Topbar({ title = "Dashboard", breadcrumb = "Home" }: Top
 
         <div className="flex items-center gap-1.5 select-none min-w-0">
           <span
-            style={{ color: "#64748B", fontSize: "13px", fontWeight: 500 }}
+            style={{ color: "#78716C", fontSize: "13px", fontWeight: 500 }}
             className="hidden sm:inline"
           >
             {breadcrumb}
           </span>
-          <span style={{ color: "#CBD5E1", fontSize: "12px" }} className="hidden sm:inline">
+          <span style={{ color: "#D6D3D1", fontSize: "12px" }} className="hidden sm:inline">
             /
           </span>
           <h1
@@ -110,8 +110,8 @@ export default function Topbar({ title = "Dashboard", breadcrumb = "Home" }: Top
               height: "36px",
               paddingLeft: "34px",
               paddingRight: "54px",
-              backgroundColor: "#F8FAFC",
-              border: "1px solid #E2E8F0",
+              backgroundColor: "#FFFFFF",
+              border: "1px solid rgba(226, 181, 68, 0.28)",
               borderRadius: "8px",
               fontSize: "12.5px",
               color: "#0B2A5B",
@@ -125,10 +125,10 @@ export default function Topbar({ title = "Dashboard", breadcrumb = "Home" }: Top
               right: "8px",
               top: "50%",
               transform: "translateY(-50%)",
-              backgroundColor: "#FFFFFF",
-              border: "1px solid #E2E8F0",
+              backgroundColor: "#FAF5EB",
+              border: "1px solid rgba(226, 181, 68, 0.3)",
               fontSize: "10px",
-              color: "#64748B",
+              color: "#78716C",
               padding: "1.5px 5px",
               borderRadius: "4px",
               pointerEvents: "none",
@@ -147,11 +147,11 @@ export default function Topbar({ title = "Dashboard", breadcrumb = "Home" }: Top
           style={{
             width: "36px",
             height: "36px",
-            backgroundColor: "#F8FAFC",
-            border: "1px solid #E2E8F0",
+            backgroundColor: "#FFFFFF",
+            border: "1px solid rgba(226, 181, 68, 0.28)",
             borderRadius: "8px",
           }}
-          className="md:hidden flex items-center justify-center text-navy hover:bg-slate-100 cursor-pointer"
+          className="md:hidden flex items-center justify-center text-navy hover:bg-[#FAF5EB] cursor-pointer"
           aria-label="Search"
         >
           <Search className="w-4 h-4 text-navy" />
@@ -160,16 +160,16 @@ export default function Topbar({ title = "Dashboard", breadcrumb = "Home" }: Top
         {/* Date chip (hidden on mobile, visible on sm and up) */}
         <div
           style={{
-            backgroundColor: "#F8FAFC",
-            border: "1px solid #E2E8F0",
+            backgroundColor: "#FFFFFF",
+            border: "1px solid rgba(226, 181, 68, 0.28)",
             borderRadius: "8px",
             padding: "6px 12px",
-            color: "#475569",
+            color: "#44403C",
             fontSize: "12.5px",
             fontWeight: 500,
             userSelect: "none",
           }}
-          className="hidden sm:flex items-center gap-1.5 shrink-0"
+          className="hidden sm:flex items-center gap-1.5 shrink-0 shadow-2xs"
         >
           <Calendar className="w-3.5 h-3.5" style={{ color: "#0B2A5B" }} />
           <span>Tue, 20 Oct 2026</span>
@@ -181,8 +181,8 @@ export default function Topbar({ title = "Dashboard", breadcrumb = "Home" }: Top
           style={{
             width: "36px",
             height: "36px",
-            backgroundColor: "#F8FAFC",
-            border: "1px solid #E2E8F0",
+            backgroundColor: "#FFFFFF",
+            border: "1px solid rgba(226, 181, 68, 0.28)",
             borderRadius: "8px",
             position: "relative",
             display: "flex",
@@ -190,7 +190,7 @@ export default function Topbar({ title = "Dashboard", breadcrumb = "Home" }: Top
             justifyContent: "center",
             color: "#0B2A5B",
           }}
-          className="hover:bg-slate-100 transition-colors shrink-0"
+          className="hover:bg-[#FAF5EB] hover:border-[#E2B544] transition-colors shrink-0 shadow-2xs"
           aria-label="Notifications"
         >
           <Bell className="w-4 h-4" />
@@ -221,7 +221,7 @@ export default function Topbar({ title = "Dashboard", breadcrumb = "Home" }: Top
 
         {/* User Profile Avatar & Info */}
         <div
-          style={{ paddingLeft: "8px", borderLeft: "1px solid #E2E8F0" }}
+          style={{ paddingLeft: "8px", borderLeft: "1px solid rgba(226, 181, 68, 0.3)" }}
           className="flex items-center gap-2.5"
         >
           <div
@@ -236,7 +236,7 @@ export default function Topbar({ title = "Dashboard", breadcrumb = "Home" }: Top
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
-              boxShadow: "0 1px 2px rgba(11, 42, 91, 0.2)",
+              boxShadow: "0 1px 3px rgba(11, 42, 91, 0.2)",
             }}
           >
             {userInitials}
@@ -245,7 +245,7 @@ export default function Topbar({ title = "Dashboard", breadcrumb = "Home" }: Top
             <span style={{ color: "#0B2A5B", fontSize: "13px", fontWeight: 700 }}>
               {userName}
             </span>
-            <span style={{ color: "#64748B", fontSize: "11px", fontWeight: 500 }}>
+            <span style={{ color: "#78716C", fontSize: "11px", fontWeight: 500 }}>
               {userRoleTitle}
             </span>
           </div>
@@ -261,9 +261,9 @@ export default function Topbar({ title = "Dashboard", breadcrumb = "Home" }: Top
             left: 0,
             right: 0,
             padding: "12px",
-            backgroundColor: "#FFFFFF",
-            borderBottom: "1px solid #E2E8F0",
-            boxShadow: "0 4px 6px -1px rgba(0, 0, 0, 0.05)",
+            backgroundColor: "#FAF5EB",
+            borderBottom: "1px solid rgba(226, 181, 68, 0.28)",
+            boxShadow: "0 6px 16px -2px rgba(11, 42, 91, 0.08)",
             zIndex: 20,
             display: "flex",
             alignItems: "center",
@@ -283,8 +283,8 @@ export default function Topbar({ title = "Dashboard", breadcrumb = "Home" }: Top
               height: "36px",
               padding: "0 12px",
               borderRadius: "8px",
-              backgroundColor: "#F8FAFC",
-              border: "1px solid #E2E8F0",
+              backgroundColor: "#FFFFFF",
+              border: "1px solid rgba(226, 181, 68, 0.28)",
               fontSize: "13px",
               color: "#0B2A5B",
             }}

@@ -43,6 +43,7 @@ next-env.d.ts
 # local browser/testing profile
 chrome_profile/
 .chrome_headless_profile/
+.temp_chrome*/
 
 # captured screenshots
 /*_desktop.png
