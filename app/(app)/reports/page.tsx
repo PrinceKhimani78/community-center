@@ -1,5 +1,14 @@
-import ComingSoonPage from "@/components/common/ComingSoonPage";
+"use client";
+
+import React from "react";
+import AdminHub from "@/components/features/AdminHub";
 
 export default function ReportsPage() {
-  return <ComingSoonPage title="Financial & Booking Reports" description="Comprehensive monthly statements, revenue collections, and hall occupancy summaries." />;
+  return (
+    <AdminHub
+      initialTab="reports"
+      title="Reports & Export"
+      subtitle="View booking and money summaries or print / download CSV."
+    />
+  );
 }

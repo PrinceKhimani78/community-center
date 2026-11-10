@@ -1,5 +1,14 @@
-import ComingSoonPage from "@/components/common/ComingSoonPage";
+"use client";
+
+import React from "react";
+import AdminHub from "@/components/features/AdminHub";
 
 export default function AuditLogsPage() {
-  return <ComingSoonPage title="Audit Logs (Admin Only)" description="Security logs, role changes, and administrative actions history." />;
+  return (
+    <AdminHub
+      initialTab="audit"
+      title="Activity Log"
+      subtitle="Simple history of recent bookings, payments, and approvals."
+    />
+  );
 }

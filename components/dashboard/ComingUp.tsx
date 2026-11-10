@@ -1,188 +1,110 @@
+"use client";
+
 import React from "react";
 import Link from "next/link";
 import { ArrowRight, CalendarDays } from "lucide-react";
-import { UPCOMING_BOOKINGS, BookingStatus } from "@/lib/mock/dashboard";
-
-interface StatusBadgeConfig {
-  bg: string;
-  color: string;
-  border: string;
-  label: string;
-}
-
-const STATUS_BADGES: Record<BookingStatus, StatusBadgeConfig> = {
-  Confirmed: {
-    bg: "#DCFCE7",
-    color: "#15803D",
-    border: "1px solid #BBF7D0",
-    label: "Confirmed",
-  },
-  Pending: {
-    bg: "#FEF3C7",
-    color: "#B45309",
-    border: "1px solid #FDE68A",
-    label: "Pending",
-  },
-  "Awaiting approval": {
-    bg: "#EFF6FF",
-    color: "#1D4ED8",
-    border: "1px solid #BFDBFE",
-    label: "Awaiting approval",
-  },
-};
+import { useDashboard } from "@/lib/context/DashboardContext";
+import StatusBadge from "@/components/common/StatusBadge";
 
 export default function ComingUp() {
+  const { bookings } = useDashboard();
+  const upcoming = bookings.filter((b) => b.status !== "Completed" && b.status !== "Cancelled");
+
   return (
     <div
       style={{
         backgroundColor: "#FFFFFF",
-        border: "1.5px solid rgba(226, 181, 68, 0.32)",
-        borderRadius: "18px",
-        boxShadow: "0 10px 28px -4px rgba(11, 42, 91, 0.05), 0 3px 10px rgba(226, 181, 68, 0.07)",
-        padding: "24px",
+        border: "1.5px solid rgba(226, 181, 68, 0.35)",
+        borderRadius: "20px",
+        boxShadow: "0 12px 28px -6px rgba(11, 42, 91, 0.06)",
+        padding: "clamp(18px, 3vw, 26px)",
       }}
-      className="flex flex-col justify-between"
+      className="flex flex-col"
     >
       {/* Header */}
       <div
-        style={{ borderBottom: "1px solid #F1ECE1", paddingBottom: "16px" }}
-        className="flex items-center justify-between mb-3"
+        style={{ borderBottom: "1px solid #F1ECE1", paddingBottom: "14px" }}
+        className="flex items-center justify-between mb-4"
       >
         <div className="flex items-center gap-2.5">
-          <CalendarDays className="w-4 h-4 text-[#C9971C]" />
-          <h3
-            style={{ color: "#0B2A5B", fontSize: "17px", fontWeight: 700 }}
-            className="tracking-tight"
-          >
-            Coming up
-          </h3>
+          <CalendarDays className="w-5 h-5 text-[#C9971C]" />
+          <h2 style={{ color: "#0B2A5B", fontSize: "18px", fontWeight: 700 }}>
+            Upcoming Bookings
+          </h2>
         </div>
         <Link
           href="/calendar"
-          style={{
-            color: "#C9971C",
-            fontSize: "13px",
-            fontWeight: 600,
-            display: "inline-flex",
-            alignItems: "center",
-            gap: "4px",
-          }}
-          className="hover:underline transition-colors group"
+          style={{ color: "#C9971C", fontSize: "13px", fontWeight: 600 }}
+          className="hover:underline inline-flex items-center gap-1 group"
         >
-          <span>Full calendar</span>
-          <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform" />
+          <span>Open Calendar</span>
+          <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
         </Link>
       </div>
 
-      {/* 5 Rows with airy spacing */}
-      <div className="space-y-1.5">
-        {UPCOMING_BOOKINGS.map((booking) => {
-          const badge = STATUS_BADGES[booking.status] || STATUS_BADGES.Confirmed;
-
+      {/* Rows */}
+      <div className="space-y-2.5">
+        {upcoming.map((booking, idx) => {
+          const dayNum = booking.dateISO.slice(8, 10);
           return (
             <Link
               key={booking.id}
               href={`/bookings/${booking.receiptNo}`}
               style={{
-                borderRadius: "10px",
-                padding: "10px 12px",
+                backgroundColor: "#FAF7F2",
+                border: "1px solid rgba(226, 181, 68, 0.22)",
+                borderRadius: "14px",
+                padding: "14px 16px",
+                animationDelay: `${idx * 45}ms`,
               }}
-              className="flex items-center justify-between gap-3 group hover:bg-[#FAF6EF] transition-all duration-150 cursor-pointer"
+              className="interactive-row animate-fade-up flex items-center justify-between gap-4 cursor-pointer"
             >
-              <div className="flex items-center gap-3.5 min-w-0 flex-1">
-                {/* Executive Calendar Tile with Navy Top and Gold text */}
+              <div className="flex items-center gap-4 min-w-0 flex-1">
+                {/* Date Tile */}
                 <div
                   style={{
-                    width: "42px",
-                    height: "46px",
+                    width: "46px",
+                    height: "50px",
                     backgroundColor: "#FFFFFF",
-                    border: "1px solid rgba(226, 181, 68, 0.4)",
-                    borderRadius: "8px",
-                    display: "flex",
-                    flexDirection: "column",
-                    alignItems: "center",
-                    justifyContent: "space-between",
-                    overflow: "hidden",
-                    flexShrink: 0,
-                    boxShadow: "0 2px 4px rgba(11, 42, 91, 0.06)",
-                    userSelect: "none",
+                    border: "1px solid rgba(226, 181, 68, 0.45)",
+                    borderRadius: "10px",
                   }}
-                  className="group-hover:border-[#E2B544] group-hover:shadow-sm transition-all"
+                  className="flex flex-col items-center justify-between overflow-hidden shrink-0 shadow-2xs"
                 >
                   <div
                     style={{
                       width: "100%",
                       backgroundColor: "#0B2A5B",
                       color: "#E2B544",
-                      fontSize: "9px",
+                      fontSize: "9.5px",
                       fontWeight: 800,
-                      textAlign: "center",
                       padding: "2px 0",
-                      letterSpacing: "0.06em",
-                      textTransform: "uppercase",
-                      lineHeight: 1.2,
                     }}
+                    className="text-center uppercase tracking-wider"
                   >
-                    {booking.month}
+                    OCT
                   </div>
                   <div
-                    style={{
-                      color: "#0B2A5B",
-                      fontSize: "15px",
-                      fontWeight: 800,
-                      paddingBottom: "4px",
-                      lineHeight: 1,
-                    }}
+                    style={{ color: "#0B2A5B", fontSize: "16px", fontWeight: 800 }}
+                    className="pb-1 leading-none"
                   >
-                    {booking.day}
+                    {dayNum}
                   </div>
                 </div>
 
-                {/* Event Name + Details */}
                 <div className="min-w-0">
-                  <h4
-                    style={{
-                      color: "#0B2A5B",
-                      fontSize: "14px",
-                      fontWeight: 700,
-                      lineHeight: 1.35,
-                    }}
-                    className="group-hover:text-blue-900 transition-colors"
-                  >
-                    {booking.title}
-                  </h4>
-                  <p
-                    style={{
-                      color: "#78716C",
-                      fontSize: "12px",
-                      marginTop: "2px",
-                      lineHeight: 1.2,
-                    }}
-                    className="truncate font-medium"
-                  >
-                    {booking.applicant} · {booking.hall}
+                  <h3 style={{ color: "#0B2A5B", fontSize: "15px", fontWeight: 700 }} className="truncate">
+                    {booking.eventTitle}
+                  </h3>
+                  <p style={{ color: "#5B6474", fontSize: "13px" }} className="truncate mt-0.5">
+                    {booking.applicantName} · {booking.hall}
                   </p>
                 </div>
               </div>
 
-              {/* Status badge */}
-              <div className="shrink-0">
-                <span
-                  style={{
-                    backgroundColor: badge.bg,
-                    color: badge.color,
-                    border: badge.border,
-                    fontSize: "11px",
-                    fontWeight: 600,
-                    padding: "3px 9px",
-                    borderRadius: "9999px",
-                    display: "inline-block",
-                    whiteSpace: "nowrap",
-                    boxShadow: "0 1px 2px rgba(0,0,0,0.02)",
-                  }}
-                >
-                  {badge.label}
-                </span>
+              <div className="flex items-center gap-3 shrink-0">
+                <StatusBadge status={booking.status} />
+                <ArrowRight className="w-4 h-4 text-[#C9971C] hidden sm:block" />
               </div>
             </Link>
           );
@@ -191,4 +113,3 @@ export default function ComingUp() {
     </div>
   );
 }
-

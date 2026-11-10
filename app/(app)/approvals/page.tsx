@@ -1,5 +1,14 @@
-import ComingSoonPage from "@/components/common/ComingSoonPage";
+"use client";
+
+import React from "react";
+import AdminHub from "@/components/features/AdminHub";
 
 export default function ApprovalsPage() {
-  return <ComingSoonPage title="Approvals (Admin Only)" description="Trustee and administrative approvals for free community hall usage and discounts." />;
+  return (
+    <AdminHub
+      initialTab="approvals"
+      title="Approvals"
+      subtitle="Approve or reject free hall use, deposit refunds, and expenses."
+    />
+  );
 }

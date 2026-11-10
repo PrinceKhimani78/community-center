@@ -4,30 +4,45 @@ import React from "react";
 import Link from "next/link";
 import { CalendarDays, Wallet, AlertCircle, ArrowRight, Clock } from "lucide-react";
 import { useDashboard } from "@/lib/context/DashboardContext";
-import { INITIAL_TODAY_HALL, INITIAL_MONEY_TO_COLLECT } from "@/lib/mock/dashboard";
 
-export default function SummaryCards() {
-  const { actionCount } = useDashboard();
-  const today = INITIAL_TODAY_HALL;
-  const money = INITIAL_MONEY_TO_COLLECT;
+interface SummaryCardsProps {
+  onOpenTodoTab?: () => void;
+}
+
+export default function SummaryCards({ onOpenTodoTab }: SummaryCardsProps) {
+  const { actionCount, actionItems, bookings } = useDashboard();
+
+  const todayBooking = bookings.find((b) => b.dateISO === "2026-10-20") || bookings[0];
+  const pendingBalances = bookings.filter((b) => !b.isFreeUse && b.rent + b.deposit - b.paid > 0);
+  const totalCollect = pendingBalances.reduce(
+    (sum, b) => sum + Math.max(0, b.rent + b.deposit - b.paid),
+    0
+  );
+
+  const todayTotalDue = todayBooking
+    ? Math.max(0, todayBooking.rent + todayBooking.deposit - todayBooking.paid)
+    : 9500;
+
+  const payTasks = actionItems.filter((i) => i.tag === "PAY").length;
+  const insTasks = actionItems.filter((i) => i.tag === "INS").length;
+  const refTasks = actionItems.filter((i) => i.tag === "REF").length;
 
   return (
     <section aria-label="Quick Summary" className="grid grid-cols-1 md:grid-cols-3 gap-5 lg:gap-6">
-      {/* 1. Today in the hall */}
+      {/* 1. TODAY IN THE HALL */}
       <Link
-        href={`/bookings/${today.receiptNo}`}
+        href={`/bookings/${todayBooking?.receiptNo || "1048"}`}
         style={{
           backgroundColor: "#FFFFFF",
-          border: "1.5px solid rgba(226, 181, 68, 0.32)",
+          border: "1.5px solid rgba(226, 181, 68, 0.35)",
           borderRadius: "18px",
-          boxShadow: "0 10px 28px -4px rgba(11, 42, 91, 0.05), 0 3px 10px rgba(226, 181, 68, 0.07)",
-          padding: "24px",
+          boxShadow: "0 10px 28px -4px rgba(11, 42, 91, 0.06), 0 3px 10px rgba(226, 181, 68, 0.08)",
+          padding: "22px",
           textDecoration: "none",
         }}
-        className="flex flex-col justify-between group cursor-pointer hover:-translate-y-1 hover:shadow-lg hover:border-[#E2B544] transition-all duration-200"
+        className="interactive-card animate-fade-up stagger-1 flex flex-col justify-between group cursor-pointer"
       >
         <div>
-          {/* Header row: Icon Badge + Category + Status Pill */}
           <div className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-2.5 min-w-0">
               <div
@@ -38,11 +53,8 @@ export default function SummaryCards() {
                   backgroundColor: "#EFF6FF",
                   border: "1px solid #BFDBFE",
                   color: "#1D4ED8",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
                 }}
-                className="group-hover:scale-105 transition-transform shrink-0"
+                className="flex items-center justify-center group-hover:scale-110 transition-transform shrink-0"
               >
                 <CalendarDays className="w-4 h-4" />
               </div>
@@ -63,31 +75,26 @@ export default function SummaryCards() {
                 borderRadius: "9999px",
                 fontSize: "11.5px",
                 fontWeight: 600,
-                display: "inline-flex",
-                alignItems: "center",
-                gap: "5px",
               }}
-              className="shrink-0"
+              className="inline-flex items-center gap-1.5 shrink-0"
             >
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block animate-pulse" />
-              <span>{today.status}</span>
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+              <span>Confirmed</span>
             </span>
           </div>
 
-          {/* Event Title & Applicant */}
           <div className="mt-4">
             <h3
-              style={{ color: "#0B2A5B", fontSize: "17px", fontWeight: 700 }}
-              className="leading-snug group-hover:text-blue-900 transition-colors truncate"
+              style={{ color: "#0B2A5B", fontSize: "18px", fontWeight: 700 }}
+              className="leading-snug truncate"
             >
-              {today.event}
+              {todayBooking?.eventTitle || "Wedding"}
             </h3>
             <p style={{ color: "#64748B", fontSize: "13px" }} className="mt-0.5 truncate font-medium">
-              {today.applicant}
+              {todayBooking?.applicantName || "Mr. Imran Patel"}
             </p>
           </div>
 
-          {/* Hall & Timing in soft minimal pill */}
           <div
             style={{
               backgroundColor: "#FAF6EF",
@@ -100,22 +107,21 @@ export default function SummaryCards() {
             className="flex items-center gap-2 mt-3.5"
           >
             <Clock className="w-3.5 h-3.5 shrink-0 text-[#C9971C]" />
-            <span className="truncate">{today.timing} · {today.hall}</span>
+            <span className="truncate">
+              {todayBooking?.timing} · {todayBooking?.hall}
+            </span>
           </div>
         </div>
 
-        {/* Footer row */}
         <div
-          style={{
-            borderTop: "1px solid #F1ECE1",
-            marginTop: "18px",
-            paddingTop: "14px",
-          }}
+          style={{ borderTop: "1px solid #F1ECE1", marginTop: "18px", paddingTop: "13px" }}
           className="flex items-center justify-between"
         >
           <div className="text-[12.5px]">
             <span style={{ color: "#78716C" }}>Pending: </span>
-            <span style={{ color: "#DC2626", fontWeight: 700 }}>{today.balance}</span>
+            <span style={{ color: "#DC2626", fontWeight: 700 }}>
+              ₹{todayTotalDue.toLocaleString("en-IN")} balance
+            </span>
           </div>
           <span
             style={{ color: "#0B2A5B", fontSize: "12.5px", fontWeight: 600 }}
@@ -127,21 +133,20 @@ export default function SummaryCards() {
         </div>
       </Link>
 
-      {/* 2. Money to collect */}
+      {/* 2. MONEY TO COLLECT */}
       <Link
         href="/payments"
         style={{
           backgroundColor: "#FFFFFF",
-          border: "1.5px solid rgba(226, 181, 68, 0.32)",
+          border: "1.5px solid rgba(226, 181, 68, 0.35)",
           borderRadius: "18px",
-          boxShadow: "0 10px 28px -4px rgba(11, 42, 91, 0.05), 0 3px 10px rgba(226, 181, 68, 0.07)",
-          padding: "24px",
+          boxShadow: "0 10px 28px -4px rgba(11, 42, 91, 0.06), 0 3px 10px rgba(226, 181, 68, 0.08)",
+          padding: "22px",
           textDecoration: "none",
         }}
-        className="flex flex-col justify-between group cursor-pointer hover:-translate-y-1 hover:shadow-lg hover:border-[#E2B544] transition-all duration-200"
+        className="interactive-card animate-fade-up stagger-2 flex flex-col justify-between group cursor-pointer"
       >
         <div>
-          {/* Header row: Icon Badge + Category + Overdue Pill */}
           <div className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-2.5 min-w-0">
               <div
@@ -152,11 +157,8 @@ export default function SummaryCards() {
                   backgroundColor: "#ECFDF5",
                   border: "1px solid #A7F3D0",
                   color: "#059669",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
                 }}
-                className="group-hover:scale-105 transition-transform shrink-0"
+                className="flex items-center justify-center group-hover:scale-110 transition-transform shrink-0"
               >
                 <Wallet className="w-4 h-4" />
               </div>
@@ -180,36 +182,25 @@ export default function SummaryCards() {
               }}
               className="shrink-0"
             >
-              {money.overdueCount} Overdue
+              1 Overdue
             </span>
           </div>
 
-          {/* Amount */}
           <div className="mt-4">
             <div
-              style={{
-                color: "#0B2A5B",
-                fontSize: "30px",
-                fontWeight: 800,
-                fontFamily: "var(--font-poppins)",
-              }}
-              className="leading-none tracking-tight flex items-baseline gap-1"
+              style={{ color: "#0B2A5B", fontSize: "30px", fontWeight: 800 }}
+              className="leading-none tracking-tight"
             >
-              <span>{money.amount}</span>
+              ₹{totalCollect.toLocaleString("en-IN")}
             </div>
             <p style={{ color: "#64748B", fontSize: "13px" }} className="mt-2 truncate font-medium">
-              Across {money.bookingCount} pending client bookings
+              Across {pendingBalances.length} pending client bookings
             </p>
           </div>
         </div>
 
-        {/* Footer row */}
         <div
-          style={{
-            borderTop: "1px solid #F1ECE1",
-            marginTop: "18px",
-            paddingTop: "14px",
-          }}
+          style={{ borderTop: "1px solid #F1ECE1", marginTop: "18px", paddingTop: "13px" }}
           className="flex items-center justify-between"
         >
           <span
@@ -222,9 +213,9 @@ export default function SummaryCards() {
               fontSize: "11.5px",
               fontWeight: 600,
             }}
-            className="flex items-center gap-1.5"
+            className="inline-flex items-center gap-1.5"
           >
-            <span className="w-1.5 h-1.5 rounded-full bg-rose-500 inline-block" />
+            <span className="w-1.5 h-1.5 rounded-full bg-rose-500" />
             <span>Action required</span>
           </span>
           <span
@@ -237,21 +228,21 @@ export default function SummaryCards() {
         </div>
       </Link>
 
-      {/* 3. Needs your action */}
-      <Link
-        href="/notifications"
+      {/* 3. NEEDS YOUR ACTION */}
+      <button
+        type="button"
+        onClick={onOpenTodoTab}
         style={{
           backgroundColor: "#FFFFFF",
-          border: "1.5px solid rgba(226, 181, 68, 0.32)",
+          border: "1.5px solid rgba(226, 181, 68, 0.35)",
           borderRadius: "18px",
-          boxShadow: "0 10px 28px -4px rgba(11, 42, 91, 0.05), 0 3px 10px rgba(226, 181, 68, 0.07)",
-          padding: "24px",
-          textDecoration: "none",
+          boxShadow: "0 10px 28px -4px rgba(11, 42, 91, 0.06), 0 3px 10px rgba(226, 181, 68, 0.08)",
+          padding: "22px",
+          textAlign: "left",
         }}
-        className="flex flex-col justify-between group cursor-pointer hover:-translate-y-1 hover:shadow-lg hover:border-[#E2B544] transition-all duration-200"
+        className="interactive-card animate-fade-up stagger-3 flex flex-col justify-between group cursor-pointer w-full"
       >
         <div>
-          {/* Header row: Icon Badge + Category + Alert Pill */}
           <div className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-2.5 min-w-0">
               <div
@@ -262,11 +253,8 @@ export default function SummaryCards() {
                   backgroundColor: "#FEF9C3",
                   border: "1px solid #FDE047",
                   color: "#B45309",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
                 }}
-                className="group-hover:scale-105 transition-transform shrink-0"
+                className="flex items-center justify-center group-hover:scale-110 transition-transform shrink-0"
               >
                 <AlertCircle className="w-4 h-4" />
               </div>
@@ -294,21 +282,14 @@ export default function SummaryCards() {
             </span>
           </div>
 
-          {/* Action Count */}
           <div className="mt-4">
             <div
-              style={{
-                color: "#0B2A5B",
-                fontSize: "30px",
-                fontWeight: 800,
-                fontFamily: "var(--font-poppins)",
-              }}
+              style={{ color: "#0B2A5B", fontSize: "30px", fontWeight: 800 }}
               className="leading-none tracking-tight"
             >
               {actionCount} Tasks
             </div>
 
-            {/* Tasks breakdown with clean spaced mini chips */}
             <div className="mt-2.5 flex items-center gap-1.5 flex-wrap">
               <span
                 style={{
@@ -321,7 +302,7 @@ export default function SummaryCards() {
                   fontWeight: 600,
                 }}
               >
-                4 payments
+                {payTasks} payments
               </span>
               <span
                 style={{
@@ -334,7 +315,7 @@ export default function SummaryCards() {
                   fontWeight: 600,
                 }}
               >
-                1 inspection
+                {insTasks} inspection
               </span>
               <span
                 style={{
@@ -347,23 +328,18 @@ export default function SummaryCards() {
                   fontWeight: 600,
                 }}
               >
-                1 refund
+                {refTasks} refund
               </span>
             </div>
           </div>
         </div>
 
-        {/* Footer row */}
         <div
-          style={{
-            borderTop: "1px solid #F1ECE1",
-            marginTop: "18px",
-            paddingTop: "14px",
-          }}
-          className="flex items-center justify-between"
+          style={{ borderTop: "1px solid #F1ECE1", marginTop: "18px", paddingTop: "13px" }}
+          className="flex items-center justify-between w-full"
         >
           <span style={{ color: "#92400E", fontSize: "12.5px", fontWeight: 500 }}>
-            Resolve from list below
+            Review checklist
           </span>
           <span
             style={{ color: "#B45309", fontSize: "12.5px", fontWeight: 700 }}
@@ -373,8 +349,7 @@ export default function SummaryCards() {
             <ArrowRight className="w-3.5 h-3.5" />
           </span>
         </div>
-      </Link>
+      </button>
     </section>
   );
 }
-

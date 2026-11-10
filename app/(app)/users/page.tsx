@@ -1,5 +1,14 @@
-import ComingSoonPage from "@/components/common/ComingSoonPage";
+"use client";
+
+import React from "react";
+import AdminHub from "@/components/features/AdminHub";
 
 export default function UsersPage() {
-  return <ComingSoonPage title="Users & Roles (Admin Only)" description="Manage system accounts, administrator privileges, and centre staff credentials." />;
+  return (
+    <AdminHub
+      initialTab="users"
+      title="Users & Roles"
+      subtitle="Manage staff accounts and active status."
+    />
+  );
 }

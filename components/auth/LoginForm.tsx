@@ -94,7 +94,7 @@ export default function LoginForm({ className = "" }: LoginFormProps) {
         maxWidth: "460px",
         padding: "44px 38px",
       }}
-      className={`mx-auto ${className}`}
+      className={`mx-auto animate-fade-up ${className}`}
       suppressHydrationWarning
     >
       <form onSubmit={handleSubmit} noValidate suppressHydrationWarning className="flex flex-col">
@@ -359,7 +359,7 @@ export default function LoginForm({ className = "" }: LoginFormProps) {
             cursor: "pointer",
             transition: "all 0.15s ease",
           }}
-          className="hover:bg-[#0B2A5B] active:scale-[0.99] disabled:opacity-75 cursor-pointer group"
+          className="interactive-btn hover:bg-[#0B2A5B] active:scale-[0.98] disabled:opacity-75 cursor-pointer group"
         >
           {isLoading ? (
             <span>Signing in…</span>

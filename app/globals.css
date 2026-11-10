@@ -46,81 +46,202 @@ body {
   font-family: var(--font-gujarati), 'Noto Sans Gujarati', 'Gujarati Sangam MN', 'Shruti', sans-serif;
 }
 
-/* Sidebar navigation item styles */
-.sidebar-nav-item {
-  color: rgba(255, 255, 255, 0.72) !important;
-  transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
-  border-left: 3px solid transparent;
+/* =========================================================================
+   ANIMATIONS & TRANSITIONS
+   Smooth, calm motion tailored for clarity and tactile feedback
+   ========================================================================= */
+@keyframes tabPanelEnter {
+  0% {
+    opacity: 0;
+    transform: translateY(10px) scale(0.994);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
 }
-.sidebar-nav-item:hover {
-  background-color: rgba(226, 181, 68, 0.16) !important;
-  color: #FFFFFF !important;
-  border-left: 3px solid #E2B544 !important;
+
+@keyframes fadeUp {
+  0% {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
-.sidebar-nav-item:hover svg {
-  color: #E2B544 !important;
+
+@keyframes checkPop {
+  0% {
+    transform: scale(0.92);
+  }
+  55% {
+    transform: scale(1.04);
+  }
+  100% {
+    transform: scale(1);
+  }
 }
-.sidebar-nav-item.active {
-  background: linear-gradient(90deg, rgba(226, 181, 68, 0.25) 0%, rgba(201, 151, 28, 0.1) 100%) !important;
-  color: #FFFFFF !important;
-  font-weight: 600;
-  border-left: 3px solid #E2B544 !important;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.2);
+
+@keyframes softPulseGlow {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(226, 181, 68, 0.32);
+  }
+  50% {
+    box-shadow: 0 0 0 6px rgba(226, 181, 68, 0);
+  }
 }
-.sidebar-nav-item.active svg {
-  color: #E2B544 !important;
+
+@keyframes gentleFloat {
+  0%, 100% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-4px);
+  }
+}
+
+.animate-tab-enter {
+  animation: tabPanelEnter 260ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.animate-fade-up {
+  animation: fadeUp 320ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.animate-check-pop {
+  animation: checkPop 260ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.animate-gold-pulse {
+  animation: softPulseGlow 2.6s ease-in-out infinite;
+}
+
+.animate-gentle-float {
+  animation: gentleFloat 4.5s ease-in-out infinite;
+}
+
+.stagger-1 { animation-delay: 40ms; }
+.stagger-2 { animation-delay: 80ms; }
+.stagger-3 { animation-delay: 120ms; }
+.stagger-4 { animation-delay: 160ms; }
+.stagger-5 { animation-delay: 200ms; }
+.stagger-6 { animation-delay: 240ms; }
+.stagger-7 { animation-delay: 280ms; }
+.stagger-8 { animation-delay: 320ms; }
+.stagger-9 { animation-delay: 360ms; }
+
+/* Tile tab card hover & press effects */
+.tile-tab-card {
+  transition:
+    transform 240ms cubic-bezier(0.16, 1, 0.3, 1),
+    box-shadow 240ms cubic-bezier(0.16, 1, 0.3, 1),
+    border-color 200ms ease,
+    filter 200ms ease;
+}
+.tile-tab-card:hover {
+  transform: translateY(-5px) scale(1.015);
+  box-shadow: 0 18px 34px -8px rgba(11, 42, 91, 0.14), 0 6px 14px rgba(226, 181, 68, 0.16);
+}
+.tile-tab-card:active {
+  transform: translateY(-1px) scale(0.985);
+}
+.tile-tab-icon {
+  transition:
+    transform 260ms cubic-bezier(0.34, 1.56, 0.64, 1),
+    box-shadow 220ms ease;
+}
+.tile-tab-card:hover .tile-tab-icon {
+  transform: scale(1.12) rotate(-3deg);
+  box-shadow: 0 10px 22px -4px rgba(11, 42, 91, 0.25);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-tab-enter,
+  .animate-fade-up,
+  .animate-check-pop,
+  .animate-gold-pulse,
+  .animate-gentle-float {
+    animation: none !important;
+  }
+}
+
+/* =========================================================================
+   INTERACTIVE HOVER & CARD EFFECTS
+   ========================================================================= */
+.interactive-card {
+  transition:
+    transform 220ms cubic-bezier(0.16, 1, 0.3, 1),
+    box-shadow 220ms cubic-bezier(0.16, 1, 0.3, 1),
+    border-color 200ms ease,
+    background-color 180ms ease;
+}
+.interactive-card:hover {
+  transform: translateY(-3px);
+  border-color: #E2B544 !important;
+  box-shadow:
+    0 16px 32px -6px rgba(11, 42, 91, 0.11),
+    0 4px 14px rgba(226, 181, 68, 0.18) !important;
+}
+.interactive-card:active {
+  transform: translateY(-1px) scale(0.995);
+}
+
+.interactive-row {
+  transition:
+    transform 200ms cubic-bezier(0.16, 1, 0.3, 1),
+    box-shadow 200ms ease,
+    border-color 180ms ease,
+    background-color 180ms ease;
+}
+.interactive-row:hover {
+  transform: translateX(4px);
+  border-color: #E2B544 !important;
+  background-color: #FFFDF8 !important;
+  box-shadow: 0 8px 20px -6px rgba(11, 42, 91, 0.09) !important;
+}
+
+.interactive-btn {
+  transition:
+    transform 180ms cubic-bezier(0.16, 1, 0.3, 1),
+    box-shadow 180ms ease,
+    background-color 160ms ease,
+    border-color 160ms ease,
+    filter 160ms ease;
+}
+.interactive-btn:hover:not(:disabled) {
+  transform: translateY(-1.5px);
+  box-shadow: 0 8px 18px -4px rgba(11, 42, 91, 0.22);
+}
+.interactive-btn:active:not(:disabled) {
+  transform: translateY(0px) scale(0.975);
+}
+
+.tab-pill {
+  transition:
+    transform 200ms cubic-bezier(0.16, 1, 0.3, 1),
+    background-color 180ms ease,
+    color 180ms ease,
+    border-color 180ms ease,
+    box-shadow 200ms ease;
+}
+.tab-pill:hover:not([aria-selected="true"]) {
+  transform: translateY(-1.5px);
+  background-color: #FFFDF8;
+  border-color: #E2B544;
+  color: #0B2A5B;
+  box-shadow: 0 6px 14px -4px rgba(226, 181, 68, 0.25);
+}
+.tab-pill:active {
+  transform: scale(0.98);
 }
 
 /* Custom focus ring */
 .focus-ring-gold:focus-visible,
 .focus-ring-gold:focus {
   outline: none;
-  box-shadow: 0 0 0 2px #E2B544;
-}
-
-/* Dashboard Interactive Hover Effects */
-.summary-card-blue {
-  transition: transform 0.22s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.22s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.2s ease;
-}
-.summary-card-blue:hover {
-  transform: translateY(-4px);
-  border-color: #2563EB !important;
-  box-shadow: 0 16px 32px -4px rgba(37, 99, 235, 0.16), 0 0 0 1px #2563EB !important;
-}
-
-.summary-card-green {
-  transition: transform 0.22s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.22s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.2s ease;
-}
-.summary-card-green:hover {
-  transform: translateY(-4px);
-  border-color: #059669 !important;
-  box-shadow: 0 16px 32px -4px rgba(5, 150, 105, 0.16), 0 0 0 1px #059669 !important;
-}
-
-.summary-card-gold {
-  transition: transform 0.22s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.22s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.2s ease;
-}
-.summary-card-gold:hover {
-  transform: translateY(-4px);
-  border-color: #E2B544 !important;
-  box-shadow: 0 16px 32px -4px rgba(226, 181, 68, 0.28), 0 0 0 1px #E2B544 !important;
-}
-
-.action-card-item {
-  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.2s ease, border-color 0.2s ease, background-color 0.15s ease;
-}
-.action-card-item:hover {
-  transform: translateY(-2px);
-  border-color: #0B2A5B !important;
-  box-shadow: 0 8px 22px -4px rgba(11, 42, 91, 0.1) !important;
-}
-
-.coming-up-item {
-  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), background-color 0.15s ease;
-}
-.coming-up-item:hover {
-  transform: translateX(5px);
-  background-color: #FAF6EF !important;
+  box-shadow: 0 0 0 2.5px #E2B544;
 }
 
 /* Hide scrollbars */
@@ -132,3 +253,14 @@ body {
   scrollbar-width: none;
 }
 
+/* Print clean receipt */
+@media print {
+  aside,
+  header,
+  .no-print {
+    display: none !important;
+  }
+  body {
+    background: #FFFFFF !important;
+  }
+}

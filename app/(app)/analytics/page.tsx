@@ -1,5 +1,14 @@
-import ComingSoonPage from "@/components/common/ComingSoonPage";
+"use client";
+
+import React from "react";
+import AdminHub from "@/components/features/AdminHub";
 
 export default function AnalyticsPage() {
-  return <ComingSoonPage title="Analytics (Admin Only)" description="Long-term hall utilization metrics and seasonal trends." />;
+  return (
+    <AdminHub
+      initialTab="reports"
+      title="Summary & Analytics"
+      subtitle="Bookings, money collected, and expense totals."
+    />
+  );
 }
