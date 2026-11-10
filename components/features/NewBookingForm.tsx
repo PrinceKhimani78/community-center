@@ -1,68 +1,195 @@
 "use client";
 
-import React, { useState, useMemo } from "react";
+import React, { useMemo, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { AlertTriangle, CheckCircle2, CalendarCheck } from "lucide-react";
+import {
+  AlertTriangle,
+  ArrowRight,
+  Calendar,
+  CheckCircle2,
+  Search,
+  Sparkles,
+  UserPlus,
+} from "lucide-react";
 import { useDashboard } from "@/lib/context/DashboardContext";
-import { HallName } from "@/lib/mock/dashboard";
+import type { BookingRecord, BookingStatus, HallName, PaymentMode } from "@/lib/mock/dashboard";
+import {
+  EVENT_TYPES,
+  HALL_OPTIONS,
+  countBookingDays,
+  dateRangesOverlap,
+  formatShortDate,
+  hallsConflict,
+  isDateInRange,
+} from "@/lib/utils/bookings";
 
 interface NewBookingFormProps {
+  editBooking?: BookingRecord;
+  initialDateISO?: string;
+  initialHall?: HallName;
   onSaved?: (receiptNo: string) => void;
 }
 
-export default function NewBookingForm({ onSaved }: NewBookingFormProps) {
+function splitTiming(timing: string): { startTime: string; endTime: string } {
+  const parts = timing.split(/–|-/).map((p) => p.trim());
+  if (parts.length >= 2 && parts[0] && parts[1]) {
+    return { startTime: parts[0], endTime: parts[1] };
+  }
+  return { startTime: "10:00 AM", endTime: "10:00 PM" };
+}
+
+function addOneDayISO(iso: string): string {
+  const dt = new Date(`${iso}T00:00:00`);
+  dt.setDate(dt.getDate() + 1);
+  return dt.toISOString().slice(0, 10);
+}
+
+export default function NewBookingForm({
+  editBooking,
+  initialDateISO,
+  initialHall,
+  onSaved,
+}: NewBookingFormProps) {
   const router = useRouter();
-  const { applicants, bookings, addBooking, addApplicant } = useDashboard();
+  const { applicants, bookings, tickets, addBooking, updateBooking, addApplicant } = useDashboard();
+
+  const isEdit = Boolean(editBooking);
+  const initialTimes = splitTiming(editBooking?.timing || "10:00 AM – 10:00 PM");
 
   const [customerMode, setCustomerMode] = useState<"existing" | "new">("existing");
-  const [selectedApplicantId, setSelectedApplicantId] = useState(applicants[0]?.id || "");
+  const [customerQuery, setCustomerQuery] = useState("");
+  const [selectedApplicantId, setSelectedApplicantId] = useState(
+    editBooking?.applicantId || applicants[0]?.id || ""
+  );
   const [newName, setNewName] = useState("");
   const [newPhone, setNewPhone] = useState("");
   const [newAddress, setNewAddress] = useState("");
 
-  const [eventType, setEventType] = useState("Wedding");
-  const [hall, setHall] = useState<HallName>("Ground + First Floor");
-  const [isAC, setIsAC] = useState(true);
-  const [dateISO, setDateISO] = useState("2026-10-30");
-  const [isMultiDay, setIsMultiDay] = useState(false);
-  const [endDateISO, setEndDateISO] = useState("2026-10-31");
-  const [timing, setTiming] = useState("10:00 AM – 10:00 PM");
-  const [guests, setGuests] = useState(250);
+  const [eventType, setEventType] = useState(editBooking?.eventType || "Wedding");
+  const [hall, setHall] = useState<HallName>(
+    editBooking?.hall || initialHall || "Ground + First Floor"
+  );
+  const [isAC, setIsAC] = useState(editBooking ? editBooking.isAC : true);
+  const [guests, setGuests] = useState(editBooking?.guests ?? 250);
 
-  const [isFreeUse, setIsFreeUse] = useState(false);
-  const [rent, setRent] = useState(22000);
-  const [deposit, setDeposit] = useState(5000);
-  const [paid, setPaid] = useState(5000);
-  const [notes, setNotes] = useState("");
+  const defaultStartISO = editBooking?.dateISO || initialDateISO || "2026-10-30";
+  const [dateISO, setDateISO] = useState(defaultStartISO);
+  const [isMultiDay, setIsMultiDay] = useState(
+    Boolean(editBooking?.endDateISO && editBooking.endDateISO > editBooking.dateISO)
+  );
+  const [endDateISO, setEndDateISO] = useState(
+    editBooking?.endDateISO || addOneDayISO(defaultStartISO)
+  );
+  const [startTime, setStartTime] = useState(initialTimes.startTime);
+  const [endTime, setEndTime] = useState(initialTimes.endTime);
+
+  const [isFreeUse, setIsFreeUse] = useState(Boolean(editBooking?.isFreeUse));
+  const [rent, setRent] = useState(editBooking?.rent ?? 22000);
+  const [deposit, setDeposit] = useState(editBooking?.deposit ?? 5000);
+  const [paid, setPaid] = useState(editBooking?.paid ?? 5000);
+  const [paymentMode, setPaymentMode] = useState<PaymentMode>(editBooking?.paymentMode || "UPI");
+  const [status, setStatus] = useState<BookingStatus>(editBooking?.status || "Pending");
+  const [notes, setNotes] = useState(editBooking?.notes || "");
 
   const [savedReceipt, setSavedReceipt] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
 
-  const clashBooking = useMemo(() => {
-    return bookings.find(
-      (b) =>
-        b.status !== "Cancelled" &&
-        b.dateISO === dateISO &&
-        (b.hall === hall ||
-          b.hall === "Ground + First Floor" ||
-          hall === "Ground + First Floor")
+  const filteredApplicants = useMemo(() => {
+    const q = customerQuery.trim().toLowerCase();
+    if (!q) return applicants;
+    return applicants.filter(
+      (a) => a.name.toLowerCase().includes(q) || a.phone.toLowerCase().includes(q)
     );
-  }, [bookings, dateISO, hall]);
+  }, [applicants, customerQuery]);
 
-  const totalCharge = isFreeUse ? 0 : Number(rent || 0) + Number(deposit || 0);
-  const balanceDue = Math.max(0, totalCharge - (isFreeUse ? 0 : Number(paid || 0)));
+  const effectiveEndISO = isMultiDay && endDateISO >= dateISO ? endDateISO : undefined;
+  const totalDays = countBookingDays(dateISO, effectiveEndISO);
+
+  const hallAvailability = useMemo(() => {
+    return HALL_OPTIONS.map((optionHall) => {
+      const bookingClash = bookings.find(
+        (b) =>
+          b.id !== editBooking?.id &&
+          b.status !== "Cancelled" &&
+          hallsConflict(b.hall, optionHall) &&
+          dateRangesOverlap(dateISO, effectiveEndISO, b.dateISO, b.endDateISO)
+      );
+      const maintenanceClash = tickets.find(
+        (t) =>
+          t.blockHall &&
+          t.blockDateISO &&
+          hallsConflict(t.location, optionHall) &&
+          isDateInRange(t.blockDateISO, dateISO, effectiveEndISO)
+      );
+
+      if (bookingClash) {
+        return {
+          hall: optionHall,
+          available: false,
+          note: `Booked · ${bookingClash.eventTitle} (${bookingClash.timing})`,
+        };
+      }
+      if (maintenanceClash) {
+        return {
+          hall: optionHall,
+          available: false,
+          note: `Maintenance · ${maintenanceClash.ticketNo}`,
+        };
+      }
+      return {
+        hall: optionHall,
+        available: true,
+        note: totalDays > 1 ? `Available all ${totalDays} days` : "Available",
+      };
+    });
+  }, [bookings, tickets, editBooking?.id, dateISO, effectiveEndISO, totalDays]);
+
+  const selectedHallStatus = hallAvailability.find((h) => h.hall === hall);
+
+  const effectiveRent = isFreeUse ? 0 : Number(rent || 0);
+  const effectiveDeposit = isFreeUse ? 0 : Number(deposit || 0);
+  const effectivePaid = isFreeUse ? 0 : Number(paid || 0);
+  const totalCharge = effectiveRent + effectiveDeposit;
+  const balanceDue = Math.max(0, totalCharge - effectivePaid);
+
+  const dateRangeLabel = useMemo(() => {
+    if (effectiveEndISO && effectiveEndISO > dateISO) {
+      return `${formatShortDate(dateISO)} – ${formatShortDate(effectiveEndISO)}`;
+    }
+    return formatShortDate(dateISO);
+  }, [dateISO, effectiveEndISO]);
+
+  const handleToggleFreeUse = (checked: boolean) => {
+    setIsFreeUse(checked);
+    if (checked) {
+      setStatus("Awaiting approval");
+    } else if (status === "Awaiting approval") {
+      setStatus("Pending");
+    }
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setFormError(null);
 
+    if (!dateISO) {
+      setFormError("Please select a start date.");
+      return;
+    }
+    if (isMultiDay && endDateISO < dateISO) {
+      setFormError("End date cannot be earlier than start date.");
+      return;
+    }
+
     let applicantId = selectedApplicantId;
-    let applicantName = applicants.find((a) => a.id === selectedApplicantId)?.name || "";
-    let phone = applicants.find((a) => a.id === selectedApplicantId)?.phone || "";
+    const selectedApplicant = applicants.find((a) => a.id === selectedApplicantId);
+    let applicantName = selectedApplicant?.name || "";
+    let phone = selectedApplicant?.phone || "";
 
     if (customerMode === "new") {
       if (!newName.trim() || !newPhone.trim()) {
-        setFormError("Please enter the person's full name and mobile number.");
+        setFormError("Please enter the customer's full name and mobile number.");
         return;
       }
       const createdApplicant = addApplicant({
@@ -75,16 +202,25 @@ export default function NewBookingForm({ onSaved }: NewBookingFormProps) {
       applicantId = createdApplicant.id;
       applicantName = createdApplicant.name;
       phone = createdApplicant.phone;
+    } else if (!applicantId) {
+      setFormError("Please select a customer or add a new one.");
+      return;
     }
 
-    const formattedDate = new Date(dateISO + "T00:00:00").toLocaleDateString("en-GB", {
-      day: "2-digit",
-      month: "short",
-      year: "numeric",
-    });
+    const formattedStart = formatShortDate(dateISO);
+    const dateLabel =
+      effectiveEndISO && effectiveEndISO > dateISO
+        ? `${dateISO.slice(8, 10)}–${formatShortDate(effectiveEndISO)}`
+        : formattedStart;
+    const combinedTiming = `${startTime.trim() || "10:00 AM"} – ${endTime.trim() || "10:00 PM"}`;
+    const eventTitle = isFreeUse
+      ? `${eventType} (free use)`
+      : totalDays > 1
+      ? `${eventType} (${totalDays} days)`
+      : eventType;
 
-    const created = addBooking({
-      eventTitle: isFreeUse ? `${eventType} (free use)` : eventType,
+    const payload = {
+      eventTitle,
       eventType,
       applicantId,
       applicantName,
@@ -92,21 +228,27 @@ export default function NewBookingForm({ onSaved }: NewBookingFormProps) {
       hall,
       isAC,
       dateISO,
-      endDateISO: isMultiDay ? endDateISO : undefined,
-      dateLabel: isMultiDay ? `${formattedDate} (Multi-day)` : formattedDate,
-      timing,
+      endDateISO: effectiveEndISO,
+      dateLabel,
+      timing: combinedTiming,
       guests: Number(guests || 100),
-      rent: isFreeUse ? 0 : Number(rent || 0),
-      deposit: isFreeUse ? 0 : Number(deposit || 0),
-      paid: isFreeUse ? 0 : Number(paid || 0),
-      status: isFreeUse ? "Awaiting approval" : balanceDue === 0 ? "Confirmed" : "Pending",
+      rent: effectiveRent,
+      deposit: effectiveDeposit,
+      paid: effectivePaid,
+      status,
       isFreeUse,
-      notes,
-    });
+      notes: notes.trim(),
+      paymentMode,
+    };
 
-    setSavedReceipt(created.receiptNo);
-    if (onSaved) {
-      onSaved(created.receiptNo);
+    if (editBooking) {
+      updateBooking(editBooking.id, payload);
+      setSavedReceipt(editBooking.receiptNo);
+      onSaved?.(editBooking.receiptNo);
+    } else {
+      const created = addBooking(payload);
+      setSavedReceipt(created.receiptNo);
+      onSaved?.(created.receiptNo);
     }
   };
 
@@ -123,10 +265,12 @@ export default function NewBookingForm({ onSaved }: NewBookingFormProps) {
       >
         <CheckCircle2 className="w-12 h-12 text-emerald-600 mx-auto mb-3" />
         <h2 style={{ color: "#0B2A5B", fontSize: "20px", fontWeight: 700 }}>
-          Booking Saved (#{savedReceipt})
+          {isEdit ? `Booking Updated (#${savedReceipt})` : `Booking Saved (#${savedReceipt})`}
         </h2>
         <p style={{ color: "#5B6474", fontSize: "14px" }} className="mt-1.5">
-          The booking is now added to your Bookings list and Calendar.
+          {isEdit
+            ? "All changes have been saved and logged in the activity history."
+            : "The booking is now listed in Bookings and shown on the Calendar."}
         </p>
         <div className="flex flex-wrap items-center justify-center gap-3 mt-6">
           <button
@@ -144,7 +288,13 @@ export default function NewBookingForm({ onSaved }: NewBookingFormProps) {
           </button>
           <button
             type="button"
-            onClick={() => setSavedReceipt(null)}
+            onClick={() => {
+              if (isEdit) {
+                router.push("/bookings");
+              } else {
+                setSavedReceipt(null);
+              }
+            }}
             style={{
               minHeight: "44px",
               backgroundColor: "#FAF5EB",
@@ -154,7 +304,7 @@ export default function NewBookingForm({ onSaved }: NewBookingFormProps) {
             }}
             className="interactive-btn px-5 py-2 text-[13.5px] font-semibold cursor-pointer"
           >
-            Add Another Booking
+            {isEdit ? "Back to Bookings" : "Add Another Booking"}
           </button>
         </div>
       </div>
@@ -163,119 +313,212 @@ export default function NewBookingForm({ onSaved }: NewBookingFormProps) {
 
   return (
     <form onSubmit={handleSubmit} className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
-      {/* Main Form Steps */}
+      {/* LEFT COLUMN — FORM CARDS */}
       <div className="lg:col-span-8 space-y-5">
         {formError && (
-          <div className="p-3.5 rounded-xl bg-red-50 border border-red-200 text-red-700 text-[13px] font-semibold animate-check-pop">
+          <div className="p-3.5 rounded-xl bg-red-50 border border-red-200 text-[#C62828] text-[13px] font-semibold animate-check-pop">
             {formError}
           </div>
         )}
 
-        {/* Step 1: Who is booking? */}
-        <div
+        {/* 1. Customer & Event */}
+        <section
           style={{
             backgroundColor: "#FFFFFF",
             border: "1.5px solid rgba(226, 181, 68, 0.35)",
             borderRadius: "18px",
             padding: "22px",
           }}
-          className="animate-fade-up stagger-1"
+          className="animate-fade-up stagger-1 space-y-4"
         >
-          <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
-            <h2 style={{ color: "#0B2A5B", fontSize: "16px", fontWeight: 700 }}>
-              Step 1 · Who is booking?
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h2 style={{ color: "#0B2A5B", fontSize: "16.5px", fontWeight: 700 }}>
+              Customer & Event
             </h2>
-            <div className="flex gap-2">
-              <button
-                type="button"
-                onClick={() => setCustomerMode("existing")}
-                className={`px-3.5 py-1.5 rounded-lg text-[12.5px] font-semibold cursor-pointer transition-all ${
-                  customerMode === "existing"
-                    ? "bg-[#0B2A5B] text-white"
-                    : "bg-[#FAF5EB] text-[#0B2A5B] border border-[#EFE4CC]"
-                }`}
-              >
-                Saved Person
-              </button>
-              <button
-                type="button"
-                onClick={() => setCustomerMode("new")}
-                className={`px-3.5 py-1.5 rounded-lg text-[12.5px] font-semibold cursor-pointer transition-all ${
-                  customerMode === "new"
-                    ? "bg-[#0B2A5B] text-white"
-                    : "bg-[#FAF5EB] text-[#0B2A5B] border border-[#EFE4CC]"
-                }`}
-              >
-                + New Person
-              </button>
-            </div>
+            <button
+              type="button"
+              onClick={() => setCustomerMode(customerMode === "existing" ? "new" : "existing")}
+              className="inline-flex items-center gap-1.5 text-[12.5px] font-bold text-[#0B2A5B] hover:text-[#C9971C] cursor-pointer"
+            >
+              <UserPlus className="w-3.5 h-3.5" />
+              <span>
+                {customerMode === "existing" ? "+ Add new customer" : "Select existing customer"}
+              </span>
+            </button>
           </div>
 
           {customerMode === "existing" ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+              <div>
+                <label className="block text-[12.5px] font-semibold text-[#14213D] mb-1.5">
+                  Customer *
+                </label>
+                <div className="relative mb-2">
+                  <Search className="w-3.5 h-3.5 text-[#5B6474] absolute left-3 top-1/2 -translate-y-1/2" />
+                  <input
+                    type="text"
+                    value={customerQuery}
+                    onChange={(e) => setCustomerQuery(e.target.value)}
+                    placeholder="Filter by name or phone..."
+                    className="w-full h-9 pl-8 pr-3 rounded-lg border border-[#E5D9BF] bg-[#FAF7F2] text-[12.5px] focus:outline-none focus:ring-2 focus:ring-[#E2B544]"
+                  />
+                </div>
+                <select
+                  value={selectedApplicantId}
+                  onChange={(e) => setSelectedApplicantId(e.target.value)}
+                  style={{ minHeight: "44px" }}
+                  className="w-full rounded-xl border border-[#E5D9BF] bg-[#FAF7F2] px-3.5 text-[13.5px] text-[#0B2A5B] font-medium focus:outline-none focus:ring-2 focus:ring-[#E2B544]"
+                >
+                  {filteredApplicants.map((a) => (
+                    <option key={a.id} value={a.id}>
+                      {a.name} · {a.phone}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-[12.5px] font-semibold text-[#14213D] mb-1.5">
+                  Event Type *
+                </label>
+                <select
+                  value={eventType}
+                  onChange={(e) => setEventType(e.target.value)}
+                  style={{ minHeight: "44px" }}
+                  className="w-full rounded-xl border border-[#E5D9BF] bg-[#FAF7F2] px-3.5 text-[13.5px] text-[#0B2A5B] font-medium focus:outline-none focus:ring-2 focus:ring-[#E2B544]"
+                >
+                  {EVENT_TYPES.map((type) => (
+                    <option key={type} value={type}>
+                      {type}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-3.5">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                <div>
+                  <label className="block text-[12.5px] font-semibold text-[#14213D] mb-1.5">
+                    Full Name *
+                  </label>
+                  <input
+                    type="text"
+                    value={newName}
+                    onChange={(e) => setNewName(e.target.value)}
+                    placeholder="e.g. Mr. Yusuf Patel"
+                    style={{ minHeight: "44px" }}
+                    className="w-full rounded-xl border border-[#E5D9BF] bg-[#FAF7F2] px-3.5 text-[13.5px] focus:outline-none focus:ring-2 focus:ring-[#E2B544]"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[12.5px] font-semibold text-[#14213D] mb-1.5">
+                    Mobile Number *
+                  </label>
+                  <input
+                    type="tel"
+                    value={newPhone}
+                    onChange={(e) => setNewPhone(e.target.value)}
+                    placeholder="+91 98..."
+                    style={{ minHeight: "44px" }}
+                    className="w-full rounded-xl border border-[#E5D9BF] bg-[#FAF7F2] px-3.5 text-[13.5px] focus:outline-none focus:ring-2 focus:ring-[#E2B544]"
+                  />
+                </div>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                <div>
+                  <label className="block text-[12.5px] font-semibold text-[#14213D] mb-1.5">
+                    Address (Optional)
+                  </label>
+                  <input
+                    type="text"
+                    value={newAddress}
+                    onChange={(e) => setNewAddress(e.target.value)}
+                    placeholder="Street / Area, Dhari"
+                    style={{ minHeight: "44px" }}
+                    className="w-full rounded-xl border border-[#E5D9BF] bg-[#FAF7F2] px-3.5 text-[13.5px] focus:outline-none focus:ring-2 focus:ring-[#E2B544]"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[12.5px] font-semibold text-[#14213D] mb-1.5">
+                    Event Type *
+                  </label>
+                  <select
+                    value={eventType}
+                    onChange={(e) => setEventType(e.target.value)}
+                    style={{ minHeight: "44px" }}
+                    className="w-full rounded-xl border border-[#E5D9BF] bg-[#FAF7F2] px-3.5 text-[13.5px] text-[#0B2A5B] font-medium focus:outline-none focus:ring-2 focus:ring-[#E2B544]"
+                  >
+                    {EVENT_TYPES.map((type) => (
+                      <option key={type} value={type}>
+                        {type}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+            </div>
+          )}
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
             <div>
-              <label className="block text-[13px] font-semibold text-[#14213D] mb-1.5">
-                Select Person
+              <label className="block text-[12.5px] font-semibold text-[#14213D] mb-1.5">
+                Hall / Venue *
               </label>
               <select
-                value={selectedApplicantId}
-                onChange={(e) => setSelectedApplicantId(e.target.value)}
-                style={{ minHeight: "46px" }}
-                className="w-full rounded-xl border border-[#E5D9BF] bg-[#FAF7F2] px-3.5 text-[14px] text-[#0B2A5B] font-medium focus:outline-none focus:ring-2 focus:ring-[#E2B544]"
+                value={hall}
+                onChange={(e) => setHall(e.target.value as HallName)}
+                style={{ minHeight: "44px" }}
+                className="w-full rounded-xl border border-[#E5D9BF] bg-[#FAF7F2] px-3.5 text-[13.5px] text-[#0B2A5B] font-medium focus:outline-none focus:ring-2 focus:ring-[#E2B544]"
               >
-                {applicants.map((a) => (
-                  <option key={a.id} value={a.id}>
-                    {a.name} ({a.phone})
+                {HALL_OPTIONS.map((option) => (
+                  <option key={option} value={option}>
+                    {option}
                   </option>
                 ))}
               </select>
             </div>
-          ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-              <div>
-                <label className="block text-[13px] font-semibold text-[#14213D] mb-1.5">
-                  Full Name
-                </label>
-                <input
-                  type="text"
-                  value={newName}
-                  onChange={(e) => setNewName(e.target.value)}
-                  placeholder="e.g. Mr. Yusuf Patel"
-                  style={{ minHeight: "46px" }}
-                  className="w-full rounded-xl border border-[#E5D9BF] bg-[#FAF7F2] px-3.5 text-[14px] focus:outline-none focus:ring-2 focus:ring-[#E2B544]"
-                />
-              </div>
-              <div>
-                <label className="block text-[13px] font-semibold text-[#14213D] mb-1.5">
-                  Mobile Number
-                </label>
-                <input
-                  type="tel"
-                  value={newPhone}
-                  onChange={(e) => setNewPhone(e.target.value)}
-                  placeholder="+91 98..."
-                  style={{ minHeight: "46px" }}
-                  className="w-full rounded-xl border border-[#E5D9BF] bg-[#FAF7F2] px-3.5 text-[14px] focus:outline-none focus:ring-2 focus:ring-[#E2B544]"
-                />
-              </div>
-              <div className="sm:col-span-2">
-                <label className="block text-[13px] font-semibold text-[#14213D] mb-1.5">
-                  Address (Optional)
-                </label>
-                <input
-                  type="text"
-                  value={newAddress}
-                  onChange={(e) => setNewAddress(e.target.value)}
-                  placeholder="Street / Area, Dhari"
-                  style={{ minHeight: "46px" }}
-                  className="w-full rounded-xl border border-[#E5D9BF] bg-[#FAF7F2] px-3.5 text-[14px] focus:outline-none focus:ring-2 focus:ring-[#E2B544]"
-                />
-              </div>
-            </div>
-          )}
-        </div>
 
-        {/* Step 2: Which Hall & Date? */}
-        <div
+            <div>
+              <label className="block text-[12.5px] font-semibold text-[#14213D] mb-1.5">
+                Expected Guests
+              </label>
+              <input
+                type="number"
+                min={10}
+                value={guests}
+                onChange={(e) => setGuests(Number(e.target.value))}
+                style={{ minHeight: "44px" }}
+                className="w-full rounded-xl border border-[#E5D9BF] bg-[#FAF7F2] px-3.5 text-[13.5px] font-semibold text-[#0B2A5B] focus:outline-none focus:ring-2 focus:ring-[#E2B544]"
+              />
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-4 pt-1">
+            <label className="inline-flex items-center gap-2 text-[13px] font-semibold text-[#0B2A5B] cursor-pointer">
+              <input
+                type="checkbox"
+                checked={isAC}
+                onChange={(e) => setIsAC(e.target.checked)}
+                className="w-4 h-4 accent-[#0B2A5B] rounded"
+              />
+              <span>With A.C.</span>
+            </label>
+
+            <label className="inline-flex items-center gap-2 text-[13px] font-semibold text-[#0B2A5B] cursor-pointer">
+              <input
+                type="checkbox"
+                checked={isFreeUse}
+                onChange={(e) => handleToggleFreeUse(e.target.checked)}
+                className="w-4 h-4 accent-[#0B2A5B] rounded"
+              />
+              <span>Free Community / Trustee Use (₹0)</span>
+            </label>
+          </div>
+        </section>
+
+        {/* 2. Date & Time */}
+        <section
           style={{
             backgroundColor: "#FFFFFF",
             border: "1.5px solid rgba(226, 181, 68, 0.35)",
@@ -284,278 +527,377 @@ export default function NewBookingForm({ onSaved }: NewBookingFormProps) {
           }}
           className="animate-fade-up stagger-2 space-y-4"
         >
-          <h2 style={{ color: "#0B2A5B", fontSize: "16px", fontWeight: 700 }}>
-            Step 2 · Which Hall & Date?
-          </h2>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h2 style={{ color: "#0B2A5B", fontSize: "16.5px", fontWeight: 700 }}>
+              Date & Time
+            </h2>
+            <label className="inline-flex items-center gap-2 text-[13px] font-semibold text-[#0B2A5B] cursor-pointer">
+              <input
+                type="checkbox"
+                checked={isMultiDay}
+                onChange={(e) => {
+                  const checked = e.target.checked;
+                  setIsMultiDay(checked);
+                  if (checked && endDateISO <= dateISO) {
+                    setEndDateISO(addOneDayISO(dateISO));
+                  }
+                }}
+                className="w-4 h-4 accent-[#0B2A5B] rounded"
+              />
+              <span>Multi-day booking</span>
+            </label>
+          </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5">
             <div>
-              <label className="block text-[13px] font-semibold text-[#14213D] mb-1.5">
-                Event Type
-              </label>
-              <select
-                value={eventType}
-                onChange={(e) => setEventType(e.target.value)}
-                style={{ minHeight: "46px" }}
-                className="w-full rounded-xl border border-[#E5D9BF] bg-[#FAF7F2] px-3.5 text-[14px] text-[#0B2A5B] font-medium focus:outline-none focus:ring-2 focus:ring-[#E2B544]"
-              >
-                <option value="Wedding">Wedding</option>
-                <option value="Walima">Walima</option>
-                <option value="Nikah">Nikah</option>
-                <option value="Engagement">Engagement</option>
-                <option value="Birthday">Birthday</option>
-                <option value="Community Meeting">Community Meeting</option>
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-[13px] font-semibold text-[#14213D] mb-1.5">
-                Select Hall
-              </label>
-              <select
-                value={hall}
-                onChange={(e) => setHall(e.target.value as HallName)}
-                style={{ minHeight: "46px" }}
-                className="w-full rounded-xl border border-[#E5D9BF] bg-[#FAF7F2] px-3.5 text-[14px] text-[#0B2A5B] font-medium focus:outline-none focus:ring-2 focus:ring-[#E2B544]"
-              >
-                <option value="Ground Floor">Ground Floor</option>
-                <option value="Ground + First Floor">Ground + First Floor</option>
-                <option value="Garden Lawn">Garden Lawn</option>
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-[13px] font-semibold text-[#14213D] mb-1.5">
-                Event Date
+              <label className="block text-[12.5px] font-semibold text-[#14213D] mb-1.5">
+                Start Date
               </label>
               <input
                 type="date"
                 value={dateISO}
-                onChange={(e) => setDateISO(e.target.value)}
-                style={{ minHeight: "46px" }}
-                className="w-full rounded-xl border border-[#E5D9BF] bg-[#FAF7F2] px-3.5 text-[14px] focus:outline-none focus:ring-2 focus:ring-[#E2B544]"
-              />
-            </div>
-
-            <div>
-              <label className="block text-[13px] font-semibold text-[#14213D] mb-1.5">
-                Timing
-              </label>
-              <input
-                type="text"
-                value={timing}
-                onChange={(e) => setTiming(e.target.value)}
-                style={{ minHeight: "46px" }}
-                className="w-full rounded-xl border border-[#E5D9BF] bg-[#FAF7F2] px-3.5 text-[14px] focus:outline-none focus:ring-2 focus:ring-[#E2B544]"
+                onChange={(e) => {
+                  const next = e.target.value;
+                  setDateISO(next);
+                  if (isMultiDay && endDateISO < next) {
+                    setEndDateISO(addOneDayISO(next));
+                  }
+                }}
+                style={{ minHeight: "44px" }}
+                className="w-full rounded-xl border border-[#E5D9BF] bg-[#FAF7F2] px-3.5 text-[13.5px] text-[#0B2A5B] focus:outline-none focus:ring-2 focus:ring-[#E2B544]"
               />
             </div>
 
             {isMultiDay && (
               <div>
-                <label className="block text-[13px] font-semibold text-[#14213D] mb-1.5">
+                <label className="block text-[12.5px] font-semibold text-[#14213D] mb-1.5">
                   End Date
                 </label>
                 <input
                   type="date"
+                  min={dateISO}
                   value={endDateISO}
                   onChange={(e) => setEndDateISO(e.target.value)}
-                  style={{ minHeight: "46px" }}
-                  className="w-full rounded-xl border border-[#E5D9BF] bg-[#FAF7F2] px-3.5 text-[14px] focus:outline-none focus:ring-2 focus:ring-[#E2B544]"
+                  style={{ minHeight: "44px" }}
+                  className="w-full rounded-xl border border-[#E5D9BF] bg-[#FAF7F2] px-3.5 text-[13.5px] text-[#0B2A5B] focus:outline-none focus:ring-2 focus:ring-[#E2B544]"
                 />
               </div>
             )}
 
             <div>
-              <label className="block text-[13px] font-semibold text-[#14213D] mb-1.5">
-                Expected Guests
-              </label>
-              <input
-                type="number"
-                min={10}
-                value={guests}
-                onChange={(e) => setGuests(Number(e.target.value))}
-                style={{ minHeight: "46px" }}
-                className="w-full rounded-xl border border-[#E5D9BF] bg-[#FAF7F2] px-3.5 text-[14px] focus:outline-none focus:ring-2 focus:ring-[#E2B544]"
-              />
-            </div>
-          </div>
-
-          <div className="flex flex-wrap gap-5 pt-1">
-            <label className="inline-flex items-center gap-2 text-[13.5px] font-medium text-[#14213D] cursor-pointer">
-              <input
-                type="checkbox"
-                checked={isAC}
-                onChange={(e) => setIsAC(e.target.checked)}
-                className="w-4 h-4 accent-[#0B2A5B]"
-              />
-              <span>Include A.C.</span>
-            </label>
-            <label className="inline-flex items-center gap-2 text-[13.5px] font-medium text-[#14213D] cursor-pointer">
-              <input
-                type="checkbox"
-                checked={isMultiDay}
-                onChange={(e) => setIsMultiDay(e.target.checked)}
-                className="w-4 h-4 accent-[#0B2A5B]"
-              />
-              <span>More than 1 day</span>
-            </label>
-            <label className="inline-flex items-center gap-2 text-[13.5px] font-medium text-[#14213D] cursor-pointer">
-              <input
-                type="checkbox"
-                checked={isFreeUse}
-                onChange={(e) => setIsFreeUse(e.target.checked)}
-                className="w-4 h-4 accent-[#0B2A5B]"
-              />
-              <span>Free community use (needs Admin approval)</span>
-            </label>
-          </div>
-
-          {clashBooking && (
-            <div className="p-3.5 rounded-xl bg-amber-50 border border-amber-300 flex items-start gap-2.5 text-amber-900 text-[13px] animate-check-pop">
-              <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5 text-amber-600" />
-              <span>
-                <strong>Date Note:</strong> {clashBooking.hall} already has{" "}
-                <strong>{clashBooking.eventTitle}</strong> ({clashBooking.applicantName}) on this date.
-              </span>
-            </div>
-          )}
-        </div>
-
-        {/* Step 3: Money Details */}
-        {!isFreeUse && (
-          <div
-            style={{
-              backgroundColor: "#FFFFFF",
-              border: "1.5px solid rgba(226, 181, 68, 0.35)",
-              borderRadius: "18px",
-              padding: "22px",
-            }}
-            className="animate-fade-up stagger-3 space-y-4"
-          >
-            <h2 style={{ color: "#0B2A5B", fontSize: "16px", fontWeight: 700 }}>
-              Step 3 · Money Details
-            </h2>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
-              <div>
-                <label className="block text-[13px] font-semibold text-[#14213D] mb-1.5">
-                  Hall Rent (₹)
-                </label>
-                <input
-                  type="number"
-                  min={0}
-                  value={rent}
-                  onChange={(e) => setRent(Number(e.target.value))}
-                  style={{ minHeight: "46px" }}
-                  className="w-full rounded-xl border border-[#E5D9BF] bg-[#FAF7F2] px-3.5 text-[14px] font-semibold focus:outline-none focus:ring-2 focus:ring-[#E2B544]"
-                />
-              </div>
-              <div>
-                <label className="block text-[13px] font-semibold text-[#14213D] mb-1.5">
-                  Security Deposit (₹)
-                </label>
-                <input
-                  type="number"
-                  min={0}
-                  value={deposit}
-                  onChange={(e) => setDeposit(Number(e.target.value))}
-                  style={{ minHeight: "46px" }}
-                  className="w-full rounded-xl border border-[#E5D9BF] bg-[#FAF7F2] px-3.5 text-[14px] font-semibold focus:outline-none focus:ring-2 focus:ring-[#E2B544]"
-                />
-              </div>
-              <div>
-                <label className="block text-[13px] font-semibold text-[#14213D] mb-1.5">
-                  Advance Paid Now (₹)
-                </label>
-                <input
-                  type="number"
-                  min={0}
-                  value={paid}
-                  onChange={(e) => setPaid(Number(e.target.value))}
-                  style={{ minHeight: "46px" }}
-                  className="w-full rounded-xl border border-[#E5D9BF] bg-[#FAF7F2] px-3.5 text-[14px] font-semibold focus:outline-none focus:ring-2 focus:ring-[#E2B544]"
-                />
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-[13px] font-semibold text-[#14213D] mb-1.5">
-                Special Notes (Optional)
+              <label className="block text-[12.5px] font-semibold text-[#14213D] mb-1.5">
+                Start Time
               </label>
               <input
                 type="text"
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-                placeholder="e.g. Extra chairs, kitchen access..."
-                style={{ minHeight: "46px" }}
-                className="w-full rounded-xl border border-[#E5D9BF] bg-[#FAF7F2] px-3.5 text-[14px] focus:outline-none focus:ring-2 focus:ring-[#E2B544]"
+                value={startTime}
+                onChange={(e) => setStartTime(e.target.value)}
+                placeholder="10:00 AM"
+                style={{ minHeight: "44px" }}
+                className="w-full rounded-xl border border-[#E5D9BF] bg-[#FAF7F2] px-3.5 text-[13.5px] text-[#0B2A5B] focus:outline-none focus:ring-2 focus:ring-[#E2B544]"
+              />
+            </div>
+
+            <div>
+              <label className="block text-[12.5px] font-semibold text-[#14213D] mb-1.5">
+                End Time
+              </label>
+              <input
+                type="text"
+                value={endTime}
+                onChange={(e) => setEndTime(e.target.value)}
+                placeholder="10:00 PM"
+                style={{ minHeight: "44px" }}
+                className="w-full rounded-xl border border-[#E5D9BF] bg-[#FAF7F2] px-3.5 text-[13.5px] text-[#0B2A5B] focus:outline-none focus:ring-2 focus:ring-[#E2B544]"
               />
             </div>
           </div>
-        )}
+
+          {/* Mobile inline availability status banner (matches 5.7) */}
+          {selectedHallStatus && (
+            <div
+              className={`lg:hidden flex items-center gap-2 px-3.5 py-2.5 rounded-xl text-[13px] font-semibold border ${
+                selectedHallStatus.available
+                  ? "bg-[#ECFDF5] border-[#BBF7D0] text-[#15803D]"
+                  : "bg-[#FEF3C7] border-[#FDE68A] text-[#92400E]"
+              }`}
+            >
+              {selectedHallStatus.available ? (
+                <CheckCircle2 className="w-4 h-4 shrink-0" />
+              ) : (
+                <AlertTriangle className="w-4 h-4 shrink-0" />
+              )}
+              <span>
+                {selectedHallStatus.hall}: {selectedHallStatus.note}
+              </span>
+            </div>
+          )}
+        </section>
+
+        {/* 3. Charges & Payment */}
+        <section
+          style={{
+            backgroundColor: "#FFFFFF",
+            border: "1.5px solid rgba(226, 181, 68, 0.35)",
+            borderRadius: "18px",
+            padding: "22px",
+          }}
+          className="animate-fade-up stagger-3 space-y-4"
+        >
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h2 style={{ color: "#0B2A5B", fontSize: "16.5px", fontWeight: 700 }}>
+              Charges & Payment
+            </h2>
+            {isFreeUse && (
+              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-blue-50 border border-blue-200 text-[#1D4ED8] text-[11.5px] font-semibold">
+                <Sparkles className="w-3.5 h-3.5" />
+                <span>Free use · Admin approval required</span>
+              </span>
+            )}
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
+            <div>
+              <label className="block text-[12.5px] font-semibold text-[#14213D] mb-1.5">
+                Rent Amount (₹)
+              </label>
+              <input
+                type="number"
+                min={0}
+                disabled={isFreeUse}
+                value={effectiveRent}
+                onChange={(e) => setRent(Number(e.target.value))}
+                style={{ minHeight: "44px" }}
+                className="w-full rounded-xl border border-[#E5D9BF] bg-[#FAF7F2] px-3.5 text-[14px] font-bold text-[#0B2A5B] disabled:opacity-55 focus:outline-none focus:ring-2 focus:ring-[#E2B544]"
+              />
+            </div>
+
+            <div>
+              <label className="block text-[12.5px] font-semibold text-[#14213D] mb-1.5">
+                Security Deposit (₹)
+              </label>
+              <input
+                type="number"
+                min={0}
+                disabled={isFreeUse}
+                value={effectiveDeposit}
+                onChange={(e) => setDeposit(Number(e.target.value))}
+                style={{ minHeight: "44px" }}
+                className="w-full rounded-xl border border-[#E5D9BF] bg-[#FAF7F2] px-3.5 text-[14px] font-bold text-[#0B2A5B] disabled:opacity-55 focus:outline-none focus:ring-2 focus:ring-[#E2B544]"
+              />
+            </div>
+
+            <div>
+              <label className="block text-[12.5px] font-semibold text-[#14213D] mb-1.5">
+                {isEdit ? "Paid So Far (₹)" : "Advance Paid (₹)"}
+              </label>
+              <input
+                type="number"
+                min={0}
+                disabled={isFreeUse}
+                value={effectivePaid}
+                onChange={(e) => setPaid(Number(e.target.value))}
+                style={{ minHeight: "44px" }}
+                className="w-full rounded-xl border border-[#E5D9BF] bg-[#FAF7F2] px-3.5 text-[14px] font-bold text-[#15803D] disabled:opacity-55 focus:outline-none focus:ring-2 focus:ring-[#E2B544]"
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+            <div>
+              <label className="block text-[12.5px] font-semibold text-[#14213D] mb-1.5">
+                Payment Mode
+              </label>
+              <select
+                value={paymentMode}
+                disabled={isFreeUse}
+                onChange={(e) => setPaymentMode(e.target.value as PaymentMode)}
+                style={{ minHeight: "44px" }}
+                className="w-full rounded-xl border border-[#E5D9BF] bg-[#FAF7F2] px-3.5 text-[13.5px] text-[#0B2A5B] font-medium disabled:opacity-55 focus:outline-none focus:ring-2 focus:ring-[#E2B544]"
+              >
+                <option value="UPI">UPI</option>
+                <option value="Cash">Cash</option>
+                <option value="Bank Transfer">Bank Transfer</option>
+                <option value="Cheque">Cheque</option>
+              </select>
+            </div>
+
+            <div className="sm:hidden flex items-center justify-between px-4 py-3 rounded-xl bg-[#FEF5DD] border border-[#F4DD9D]">
+              <span className="text-[13px] font-bold text-[#0B2A5B]">Balance Due</span>
+              <span className="text-[18px] font-extrabold text-[#0B2A5B]">
+                ₹{balanceDue.toLocaleString("en-IN")}
+              </span>
+            </div>
+          </div>
+        </section>
+
+        {/* 4. Notes & Special Instructions */}
+        <section
+          style={{
+            backgroundColor: "#FFFFFF",
+            border: "1.5px solid rgba(226, 181, 68, 0.35)",
+            borderRadius: "18px",
+            padding: "22px",
+          }}
+          className="animate-fade-up stagger-4 space-y-3"
+        >
+          <h2 style={{ color: "#0B2A5B", fontSize: "16.5px", fontWeight: 700 }}>
+            Notes & Special Instructions
+          </h2>
+          <textarea
+            rows={3}
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+            placeholder="Stage decoration, kitchen access, separate seating, generator backup..."
+            className="w-full rounded-xl border border-[#E5D9BF] bg-[#FAF7F2] p-3.5 text-[13.5px] text-[#14213D] focus:outline-none focus:ring-2 focus:ring-[#E2B544]"
+          />
+        </section>
       </div>
 
-      {/* Right Summary Panel */}
-      <div
-        style={{
-          backgroundColor: "#FFFFFF",
-          border: "1.5px solid rgba(226, 181, 68, 0.4)",
-          borderRadius: "18px",
-          padding: "22px",
-          boxShadow: "0 12px 26px -6px rgba(11, 42, 91, 0.08)",
-        }}
-        className="lg:col-span-4 lg:sticky lg:top-20 space-y-4 animate-fade-up stagger-2"
-      >
-        <div className="flex items-center gap-2 border-b border-[#F1ECE1] pb-3">
-          <CalendarCheck className="w-5 h-5 text-[#C9971C]" />
-          <h3 style={{ color: "#0B2A5B", fontSize: "16px", fontWeight: 700 }}>
-            Booking Summary
-          </h3>
-        </div>
+      {/* RIGHT COLUMN — LIVE AVAILABILITY + NAVY SUMMARY PANEL */}
+      <div className="lg:col-span-4 space-y-5 lg:sticky lg:top-[76px]">
+        {/* Live Availability Panel */}
+        <section
+          style={{
+            backgroundColor: "#FFFFFF",
+            border: "1.5px solid rgba(226, 181, 68, 0.35)",
+            borderRadius: "18px",
+            padding: "20px",
+          }}
+          className="space-y-3"
+        >
+          <div className="flex items-center justify-between gap-2">
+            <h3 style={{ color: "#0B2A5B", fontSize: "15px", fontWeight: 700 }}>
+              Availability · {dateRangeLabel}
+            </h3>
+            <Calendar className="w-4 h-4 text-[#C9971C] shrink-0" />
+          </div>
 
-        <div className="space-y-2.5 text-[13.5px]">
-          <div className="flex justify-between">
-            <span className="text-[#5B6474]">Hall</span>
-            <span className="font-semibold text-[#0B2A5B]">{hall}</span>
+          <div className="space-y-2">
+            {hallAvailability.map((item) => {
+              const isSelected = item.hall === hall;
+              return (
+                <div
+                  key={item.hall}
+                  style={{
+                    borderRadius: "12px",
+                    padding: "10px 12px",
+                  }}
+                  className={`flex items-start gap-2.5 text-[12.5px] border transition-all ${
+                    item.available
+                      ? "bg-[#ECFDF5] border-[#BBF7D0] text-[#14532D]"
+                      : "bg-[#FEF3C7] border-[#FDE68A] text-[#92400E]"
+                  } ${isSelected ? "ring-2 ring-[#0B2A5B]/25" : ""}`}
+                >
+                  {item.available ? (
+                    <CheckCircle2 className="w-4 h-4 text-[#15803D] shrink-0 mt-0.5" />
+                  ) : (
+                    <AlertTriangle className="w-4 h-4 text-[#B45309] shrink-0 mt-0.5" />
+                  )}
+                  <div className="min-w-0">
+                    <div className="font-bold">
+                      {item.hall}
+                      {isSelected ? " (Selected)" : ""}
+                    </div>
+                    <div className="text-[11.5px] opacity-90">{item.note}</div>
+                  </div>
+                </div>
+              );
+            })}
           </div>
-          <div className="flex justify-between">
-            <span className="text-[#5B6474]">Date</span>
-            <span className="font-semibold text-[#0B2A5B]">{dateISO}</span>
+
+          <Link
+            href="/calendar"
+            className="inline-flex items-center gap-1 text-[12.5px] font-bold text-[#0B2A5B] hover:text-[#C9971C] pt-1"
+          >
+            <span>Open calendar</span>
+            <ArrowRight className="w-3.5 h-3.5" />
+          </Link>
+        </section>
+
+        {/* Navy Booking Summary Card */}
+        <section
+          style={{
+            background: "linear-gradient(160deg, #071E47 0%, #0B2A5B 100%)",
+            border: "1.5px solid rgba(226, 181, 68, 0.45)",
+            borderRadius: "18px",
+            padding: "22px",
+            color: "#FFFFFF",
+          }}
+          className="space-y-4 shadow-lg"
+        >
+          <h3 className="text-[16px] font-bold text-white">Booking Summary</h3>
+
+          <div className="space-y-2.5 text-[13px] border-b border-white/15 pb-3.5">
+            <div className="flex justify-between text-white/85">
+              <span>Rent {totalDays > 1 ? `(${totalDays} days)` : ""}</span>
+              <span className="font-semibold text-white">
+                {isFreeUse ? "Free" : `₹${effectiveRent.toLocaleString("en-IN")}`}
+              </span>
+            </div>
+            <div className="flex justify-between text-white/85">
+              <span>Security deposit (refundable)</span>
+              <span className="font-semibold text-white">
+                ₹{effectiveDeposit.toLocaleString("en-IN")}
+              </span>
+            </div>
+            <div className="flex justify-between text-white/85">
+              <span>{isEdit ? "Paid so far" : "Advance paid"}</span>
+              <span className="font-semibold text-white">
+                − ₹{effectivePaid.toLocaleString("en-IN")}
+              </span>
+            </div>
           </div>
-          <div className="flex justify-between">
-            <span className="text-[#5B6474]">Total (Rent + Deposit)</span>
-            <span className="font-bold text-[#0B2A5B]">
-              ₹{totalCharge.toLocaleString("en-IN")}
-            </span>
-          </div>
-          <div className="flex justify-between">
-            <span className="text-[#5B6474]">Advance Paid</span>
-            <span className="font-semibold text-[#15803D]">
-              ₹{(isFreeUse ? 0 : Number(paid || 0)).toLocaleString("en-IN")}
-            </span>
-          </div>
-          <div className="flex justify-between pt-2.5 border-t border-[#F1ECE1] text-[15px]">
-            <span className="font-bold text-[#0B2A5B]">Balance Remaining</span>
-            <span className="font-extrabold text-[#C62828]">
+
+          <div className="flex items-baseline justify-between">
+            <span className="text-[13.5px] font-semibold text-white/90">Balance due</span>
+            <span className="text-[24px] font-extrabold text-[#F4CF6A]">
               ₹{balanceDue.toLocaleString("en-IN")}
             </span>
           </div>
-        </div>
 
-        <button
-          type="submit"
-          style={{
-            minHeight: "48px",
-            background: "linear-gradient(135deg, #071E47 0%, #0B2A5B 100%)",
-            border: "1.5px solid #E2B544",
-            color: "#FFFFFF",
-            borderRadius: "12px",
-          }}
-          className="interactive-btn w-full text-[14.5px] font-bold cursor-pointer mt-2"
-        >
-          Save Booking
-        </button>
+          <div>
+            <label className="block text-[12px] font-semibold text-white/80 mb-1.5">
+              Status
+            </label>
+            <select
+              value={status}
+              onChange={(e) => setStatus(e.target.value as BookingStatus)}
+              style={{ minHeight: "42px" }}
+              className="w-full rounded-xl bg-white px-3.5 text-[13.5px] font-bold text-[#0B2A5B] focus:outline-none focus:ring-2 focus:ring-[#E2B544]"
+            >
+              <option value="Pending">Pending</option>
+              <option value="Confirmed">Confirmed</option>
+              <option value="Awaiting approval">Awaiting approval</option>
+              {isEdit && <option value="Completed">Completed</option>}
+              {isEdit && <option value="Cancelled">Cancelled</option>}
+            </select>
+          </div>
+
+          <div className="space-y-2.5 pt-1">
+            <button
+              type="submit"
+              style={{
+                minHeight: "46px",
+                background: "linear-gradient(135deg, #F7E6A9 0%, #E2B544 55%, #C9971C 100%)",
+                color: "#041535",
+                borderRadius: "12px",
+              }}
+              className="interactive-btn w-full text-[14px] font-bold cursor-pointer"
+            >
+              {isEdit ? "Update Booking" : "Save Booking"}
+            </button>
+
+            <Link
+              href={editBooking ? `/bookings/${editBooking.receiptNo}` : "/bookings"}
+              style={{ minHeight: "44px" }}
+              className="w-full rounded-xl border border-white/25 text-white/90 hover:bg-white/10 text-[13.5px] font-semibold inline-flex items-center justify-center transition-colors"
+            >
+              Cancel
+            </Link>
+          </div>
+        </section>
       </div>
     </form>
   );
 }
-

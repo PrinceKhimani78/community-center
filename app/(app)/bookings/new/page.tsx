@@ -1,19 +1,41 @@
 "use client";
 
-import React from "react";
+import React, { Suspense } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 import PageShell from "@/components/common/PageShell";
 import NewBookingForm from "@/components/features/NewBookingForm";
+import { useDashboard } from "@/lib/context/DashboardContext";
+import type { HallName } from "@/lib/mock/dashboard";
+import { HALL_OPTIONS } from "@/lib/utils/bookings";
 
-export default function NewBookingPage() {
+function NewOrEditBookingContent() {
+  const searchParams = useSearchParams();
+  const { bookings } = useDashboard();
+
+  const editParam = searchParams.get("edit");
+  const dateParam = searchParams.get("date") || undefined;
+  const hallParam = searchParams.get("hall");
+  const initialHall = HALL_OPTIONS.includes(hallParam as HallName)
+    ? (hallParam as HallName)
+    : undefined;
+
+  const editBooking = editParam
+    ? bookings.find((b) => b.receiptNo === editParam || b.id === editParam)
+    : undefined;
+
   return (
     <PageShell
-      title="New Booking"
-      subtitle="Fill these 3 simple steps to book a community hall."
+      title={editBooking ? `Edit Booking #${editBooking.receiptNo}` : "New Booking"}
+      subtitle={
+        editBooking
+          ? `Updating ${editBooking.eventTitle} for ${editBooking.applicantName}.`
+          : "Bookings · Create single or multi-day hall reservations with live availability."
+      }
       rightSlot={
         <Link
-          href="/bookings"
+          href={editBooking ? `/bookings/${editBooking.receiptNo}` : "/bookings"}
           style={{
             minHeight: "42px",
             backgroundColor: "#FFFFFF",
@@ -24,11 +46,24 @@ export default function NewBookingPage() {
           className="interactive-btn px-4 py-2 text-[13px] font-semibold inline-flex items-center gap-1.5"
         >
           <ArrowLeft className="w-4 h-4" />
-          <span>Back to Bookings</span>
+          <span>{editBooking ? "Back to Details" : "Back to Bookings"}</span>
         </Link>
       }
     >
-      <NewBookingForm />
+      <NewBookingForm
+        key={editBooking?.id || `${dateParam || ""}-${initialHall || ""}`}
+        editBooking={editBooking}
+        initialDateISO={dateParam}
+        initialHall={initialHall}
+      />
     </PageShell>
+  );
+}
+
+export default function NewBookingPage() {
+  return (
+    <Suspense fallback={<div className="p-8 text-[#0B2A5B]">Loading booking form...</div>}>
+      <NewOrEditBookingContent />
+    </Suspense>
   );
 }

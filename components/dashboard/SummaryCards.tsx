@@ -13,7 +13,9 @@ export default function SummaryCards({ onOpenTodoTab }: SummaryCardsProps) {
   const { actionCount, actionItems, bookings } = useDashboard();
 
   const todayBooking = bookings.find((b) => b.dateISO === "2026-10-20") || bookings[0];
-  const pendingBalances = bookings.filter((b) => !b.isFreeUse && b.rent + b.deposit - b.paid > 0);
+  const pendingBalances = bookings.filter(
+    (b) => b.status !== "Cancelled" && !b.isFreeUse && b.rent + b.deposit - b.paid > 0
+  );
   const totalCollect = pendingBalances.reduce(
     (sum, b) => sum + Math.max(0, b.rent + b.deposit - b.paid),
     0

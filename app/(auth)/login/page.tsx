@@ -2,6 +2,7 @@ import React from "react";
 import type { Metadata } from "next";
 import Image from "next/image";
 import LoginForm from "@/components/auth/LoginForm";
+import LanguageSwitcher from "@/components/common/LanguageSwitcher";
 
 export const metadata: Metadata = {
   title: "Login · Haji Mohamed Yunus Valibhoy Community Centre",
@@ -257,6 +258,7 @@ export default function LoginPage() {
               fontFamily: "var(--font-gujarati), 'Noto Sans Gujarati', sans-serif",
               textShadow: "0 2px 8px rgba(0,0,0,0.35)",
             }}
+            className="notranslate"
           >
             <span>હાજી મોહમ્મદ યુનુસ વલીભોય</span>
             <br />
@@ -281,8 +283,11 @@ export default function LoginPage() {
         <section
           aria-label="Sign In"
           style={{ width: "52%", height: "100%" }}
-          className="relative z-10 flex items-center justify-center p-6 xl:p-10 overflow-y-auto no-scrollbar"
+          className="relative z-10 flex flex-col items-center justify-center p-6 xl:p-10 overflow-y-auto no-scrollbar"
         >
+          <div className="absolute top-5 right-6 z-20">
+            <LanguageSwitcher variant="light" />
+          </div>
           <div style={{ transform: "translateX(-16px)" }} className="w-full flex justify-center">
             <LoginForm />
           </div>
@@ -302,8 +307,11 @@ export default function LoginPage() {
             backgroundColor: "#0B2A5B",
             backgroundImage: "radial-gradient(ellipse at top, #123B7C 0%, #0B2A5B 60%, #041533 100%)",
           }}
-          className="relative w-full pt-10 pb-20 px-4 text-center overflow-hidden"
+          className="relative w-full pt-4 pb-20 px-4 text-center overflow-hidden"
         >
+          <div className="relative z-20 flex justify-end mb-3">
+            <LanguageSwitcher variant="dark" compact />
+          </div>
           {/* Bottom Curved Golden Wave to Cream */}
           <div className="absolute -bottom-[1px] left-0 w-full overflow-hidden leading-none z-0">
             <svg
@@ -402,6 +410,7 @@ export default function LoginPage() {
                 lineHeight: 1.3,
                 fontFamily: "var(--font-gujarati), 'Noto Sans Gujarati', sans-serif",
               }}
+              className="notranslate"
             >
               <span>હાજી મોહમ્મદ યુનુસ વલીભોય</span>
               <br />

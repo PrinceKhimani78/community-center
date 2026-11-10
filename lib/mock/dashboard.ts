@@ -65,6 +65,13 @@ export interface BookingRecord {
   status: BookingStatus;
   isFreeUse?: boolean;
   notes?: string;
+  paymentMode?: PaymentMode;
+  createdAtLabel?: string;
+  createdBy?: string;
+  preInspectionDone?: boolean;
+  postInspectionDone?: boolean;
+  depositStatus?: "Held" | "Awaiting inspection" | "Refunded" | "N/A";
+  cancellationReason?: string;
 }
 
 export interface ApplicantRecord {
@@ -372,6 +379,14 @@ export const INITIAL_APPLICANTS: ApplicantRecord[] = [
     idProofMasked: "XXXX-XXXX-5518",
     notes: "Hall left clean after 17 Oct wedding.",
   },
+  {
+    id: "app-8",
+    name: "Ms. Nazia Kureshi",
+    phone: "+91 96620 44120",
+    address: "Station Road, Dhari",
+    idProofMasked: "XXXX-XXXX-2204",
+    notes: "Cancelled 06 Oct booking due to family travel.",
+  },
 ];
 
 export const INITIAL_BOOKINGS: BookingRecord[] = [
@@ -393,7 +408,13 @@ export const INITIAL_BOOKINGS: BookingRecord[] = [
     deposit: 5000,
     paid: 17500,
     status: "Confirmed",
-    notes: "Full A.C. and kitchen setup included.",
+    notes: "Full A.C. and kitchen setup included. Stage decoration by family's vendor.",
+    paymentMode: "UPI",
+    createdAtLabel: "05 Oct 2026, 11:20 AM",
+    createdBy: "Manager",
+    preInspectionDone: true,
+    postInspectionDone: false,
+    depositStatus: "Awaiting inspection",
   },
   {
     id: "bk-1051",
@@ -414,6 +435,12 @@ export const INITIAL_BOOKINGS: BookingRecord[] = [
     paid: 18000,
     status: "Pending",
     notes: "₹7,000 remaining balance due before event.",
+    paymentMode: "Bank Transfer",
+    createdAtLabel: "08 Oct 2026, 02:15 PM",
+    createdBy: "Manager",
+    preInspectionDone: false,
+    postInspectionDone: false,
+    depositStatus: "Held",
   },
   {
     id: "bk-1052",
@@ -435,6 +462,11 @@ export const INITIAL_BOOKINGS: BookingRecord[] = [
     status: "Awaiting approval",
     isFreeUse: true,
     notes: "Waiting for Admin / Trustee sign-off.",
+    createdAtLabel: "10 Oct 2026, 10:05 AM",
+    createdBy: "Manager",
+    preInspectionDone: false,
+    postInspectionDone: false,
+    depositStatus: "N/A",
   },
   {
     id: "bk-1053",
@@ -455,6 +487,12 @@ export const INITIAL_BOOKINGS: BookingRecord[] = [
     paid: 11000,
     status: "Confirmed",
     notes: "₹4,000 balance overdue since 18 Oct.",
+    paymentMode: "Cash",
+    createdAtLabel: "09 Oct 2026, 04:30 PM",
+    createdBy: "Manager",
+    preInspectionDone: false,
+    postInspectionDone: false,
+    depositStatus: "Held",
   },
   {
     id: "bk-1054",
@@ -475,6 +513,12 @@ export const INITIAL_BOOKINGS: BookingRecord[] = [
     paid: 2000,
     status: "Pending",
     notes: "Advance paid; confirm booking after remaining rent.",
+    paymentMode: "UPI",
+    createdAtLabel: "12 Oct 2026, 06:10 PM",
+    createdBy: "Manager",
+    preInspectionDone: false,
+    postInspectionDone: false,
+    depositStatus: "Held",
   },
   {
     id: "bk-1055",
@@ -496,6 +540,12 @@ export const INITIAL_BOOKINGS: BookingRecord[] = [
     paid: 25000,
     status: "Confirmed",
     notes: "2-day full centre reservation.",
+    paymentMode: "Cheque",
+    createdAtLabel: "11 Oct 2026, 12:45 PM",
+    createdBy: "Admin",
+    preInspectionDone: false,
+    postInspectionDone: false,
+    depositStatus: "Held",
   },
   {
     id: "bk-1045",
@@ -516,6 +566,39 @@ export const INITIAL_BOOKINGS: BookingRecord[] = [
     paid: 27000,
     status: "Completed",
     notes: "Post-event check passed with zero damage.",
+    paymentMode: "Cash",
+    createdAtLabel: "01 Oct 2026, 09:30 AM",
+    createdBy: "Manager",
+    preInspectionDone: true,
+    postInspectionDone: true,
+    depositStatus: "Awaiting inspection",
+  },
+  {
+    id: "bk-1039",
+    receiptNo: "1039",
+    eventTitle: "Birthday Party",
+    eventType: "Birthday",
+    applicantId: "app-8",
+    applicantName: "Ms. Nazia Kureshi",
+    phone: "+91 96620 44120",
+    hall: "Garden Lawn",
+    isAC: false,
+    dateISO: "2026-10-06",
+    dateLabel: "06 Oct 2026",
+    timing: "7:00 PM – 10:00 PM",
+    guests: 90,
+    rent: 10000,
+    deposit: 2000,
+    paid: 12000,
+    status: "Cancelled",
+    notes: "Cancelled prior to event; advance & deposit refunded.",
+    paymentMode: "UPI",
+    createdAtLabel: "25 Sep 2026, 04:00 PM",
+    createdBy: "Manager",
+    preInspectionDone: false,
+    postInspectionDone: false,
+    depositStatus: "Refunded",
+    cancellationReason: "Family postponed function",
   },
 ];
 

@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Poppins, Noto_Sans_Gujarati } from "next/font/google";
+import GoogleTranslateScript from "@/components/common/GoogleTranslateScript";
 import "./globals.css";
 
 const poppins = Poppins({
@@ -36,6 +37,7 @@ export default function RootLayout({
         className="min-h-full flex flex-col bg-[#FAF5EB] text-ink font-sans antialiased"
         suppressHydrationWarning
       >
+        <GoogleTranslateScript />
         {children}
       </body>
     </html>

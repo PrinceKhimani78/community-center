@@ -198,8 +198,9 @@ export default function Sidebar() {
                 Haji Mohamed Yunus Valibhoy Community Centre
               </h1>
               <p
+                lang="gu"
                 style={{ color: "#F5C444" }}
-                className="text-[10px] font-bold leading-tight font-gujarati mt-0.5"
+                className="notranslate text-[10px] font-bold leading-tight font-gujarati mt-0.5"
               >
                 હાજી મોહમ્મદ યુનુસ વલીભોય કોમ્યુનિટી સેન્ટર
               </p>

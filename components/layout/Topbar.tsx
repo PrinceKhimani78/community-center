@@ -6,6 +6,7 @@ import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { Calendar, Bell, ArrowLeft } from "lucide-react";
 import { useDashboard } from "@/lib/context/DashboardContext";
+import LanguageSwitcher from "@/components/common/LanguageSwitcher";
 
 interface TopbarProps {
   title?: string;
@@ -81,6 +82,8 @@ export default function Topbar({ title }: TopbarProps) {
         </div>
 
         <div className="flex items-center gap-2.5 shrink-0">
+          <LanguageSwitcher variant="light" />
+
           <div
             style={{
               backgroundColor: "#FFFFFF",
@@ -160,6 +163,7 @@ export default function Topbar({ title }: TopbarProps) {
                 justifyContent: "center",
                 boxShadow: "0 2px 6px rgba(11, 42, 91, 0.18)",
               }}
+              className="notranslate"
             >
               {userInitials}
             </div>
@@ -183,8 +187,12 @@ export default function Topbar({ title }: TopbarProps) {
             style={{
               background: "linear-gradient(180deg, #061A3E 0%, #0B2A5B 100%)",
             }}
-            className="relative px-4 pt-4 pb-8 overflow-hidden"
+            className="relative px-4 pt-3 pb-8 overflow-hidden"
           >
+            <div className="relative z-10 flex justify-end mb-2">
+              <LanguageSwitcher variant="dark" compact />
+            </div>
+
             <div className="relative z-10 flex items-center justify-between gap-3">
               <div className="flex items-center gap-3 min-w-0">
                 <Image
@@ -201,7 +209,7 @@ export default function Topbar({ title }: TopbarProps) {
                   </div>
                   <div
                     lang="gu"
-                    className="text-[#F5C444] text-[12px] font-bold leading-snug mt-0.5"
+                    className="notranslate text-[#F5C444] text-[12px] font-bold leading-snug mt-0.5"
                   >
                     હાજી મોહમ્મદ યુનુસ વલીભોય કોમ્યુનિટી સેન્ટર
                   </div>
@@ -265,18 +273,22 @@ export default function Topbar({ title }: TopbarProps) {
               <span className="text-[15px] font-bold truncate">{displayTitle}</span>
             </div>
 
-            <Link
-              href="/notifications"
-              className="relative w-9 h-9 rounded-xl bg-white/10 border border-white/20 flex items-center justify-center text-white shrink-0"
-              aria-label="Notifications"
-            >
-              <Bell className="w-4 h-4" />
-              {actionCount > 0 && (
-                <span className="absolute -top-1 -right-1 bg-red-600 text-white text-[9.5px] font-bold min-w-[16px] h-[16px] px-1 rounded-full flex items-center justify-center">
-                  {actionCount}
-                </span>
-              )}
-            </Link>
+            <div className="flex items-center gap-2 shrink-0">
+              <LanguageSwitcher variant="dark" compact />
+
+              <Link
+                href="/notifications"
+                className="relative w-9 h-9 rounded-xl bg-white/10 border border-white/20 flex items-center justify-center text-white shrink-0"
+                aria-label="Notifications"
+              >
+                <Bell className="w-4 h-4" />
+                {actionCount > 0 && (
+                  <span className="absolute -top-1 -right-1 bg-red-600 text-white text-[9.5px] font-bold min-w-[16px] h-[16px] px-1 rounded-full flex items-center justify-center">
+                    {actionCount}
+                  </span>
+                )}
+              </Link>
+            </div>
           </header>
         )}
       </div>

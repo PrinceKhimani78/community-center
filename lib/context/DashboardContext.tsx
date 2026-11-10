@@ -76,6 +76,11 @@ interface DashboardContextType {
 
   // Actions
   addBooking: (booking: Omit<BookingRecord, "id" | "receiptNo">) => BookingRecord;
+  updateBooking: (
+    bookingId: string,
+    updates: Partial<Omit<BookingRecord, "id" | "receiptNo">>
+  ) => BookingRecord | null;
+  cancelBooking: (bookingId: string, reason?: string) => void;
   updateBookingStatus: (bookingId: string, status: BookingStatus) => void;
   addApplicant: (applicant: Omit<ApplicantRecord, "id">) => ApplicantRecord;
   recordPayment: (input: {
@@ -191,11 +196,19 @@ export function DashboardProvider({
 
   const addBooking = useCallback(
     (input: Omit<BookingRecord, "id" | "receiptNo">) => {
-      const nextNo = String(1056 + bookings.length);
+      const maxNo = bookings.reduce((max, b) => {
+        const parsed = parseInt(b.receiptNo, 10);
+        return Number.isFinite(parsed) && parsed > max ? parsed : max;
+      }, 1055);
+      const nextNo = String(maxNo + 1);
+      const actor = role === "admin" ? "Admin" : "Manager";
       const created: BookingRecord = {
         ...input,
         id: `bk-${nextNo}`,
         receiptNo: nextNo,
+        createdAtLabel: `20 Oct 2026, ${getCurrentTimeLabel()}`,
+        createdBy: actor,
+        depositStatus: input.isFreeUse ? "N/A" : "Held",
       };
       setBookings((prev) => [created, ...prev]);
 
@@ -209,7 +222,7 @@ export function DashboardProvider({
           eventTitle: `${created.eventTitle} (${created.dateLabel})`,
           type: "Advance",
           amount: input.paid,
-          mode: "Cash",
+          mode: input.paymentMode || "Cash",
           reference: `ADV-${nextNo}`,
           dateLabel: "20 Oct 2026",
         };
@@ -223,7 +236,52 @@ export function DashboardProvider({
       );
       return created;
     },
-    [bookings.length, appendLog]
+    [bookings, role, appendLog]
+  );
+
+  const updateBooking = useCallback(
+    (bookingId: string, updates: Partial<Omit<BookingRecord, "id" | "receiptNo">>) => {
+      let updatedRecord: BookingRecord | null = null;
+      setBookings((prev) =>
+        prev.map((b) => {
+          if (b.id !== bookingId && b.receiptNo !== bookingId) return b;
+          updatedRecord = { ...b, ...updates };
+          return updatedRecord;
+        })
+      );
+      appendLog(
+        "Booking",
+        `Edited booking #${bookingId.replace(/^bk-/, "")}`,
+        updates.eventTitle
+          ? `${updates.eventTitle} · ${updates.dateLabel || ""}`.trim()
+          : `Updated details for booking ${bookingId}`
+      );
+      return updatedRecord;
+    },
+    [appendLog]
+  );
+
+  const cancelBooking = useCallback(
+    (bookingId: string, reason?: string) => {
+      setBookings((prev) =>
+        prev.map((b) =>
+          b.id === bookingId || b.receiptNo === bookingId
+            ? {
+                ...b,
+                status: "Cancelled",
+                cancellationReason: reason?.trim() || "Cancelled by staff",
+                depositStatus: b.paid > 0 ? "Refunded" : b.depositStatus,
+              }
+            : b
+        )
+      );
+      appendLog(
+        "Booking",
+        `Cancelled booking #${bookingId.replace(/^bk-/, "")}`,
+        reason?.trim() || "Booking cancelled"
+      );
+    },
+    [appendLog]
   );
 
   const updateBookingStatus = useCallback(
@@ -451,6 +509,8 @@ export function DashboardProvider({
         auditLogs,
         users,
         addBooking,
+        updateBooking,
+        cancelBooking,
         updateBookingStatus,
         addApplicant,
         recordPayment,
