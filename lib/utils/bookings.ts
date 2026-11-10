@@ -3,7 +3,6 @@ import type { BookingRecord, BookingStatus, HallName } from "@/lib/mock/dashboar
 export const HALL_OPTIONS: HallName[] = [
   "Ground Floor",
   "Ground + First Floor",
-  "Garden Lawn",
 ];
 
 export const EVENT_TYPES = [

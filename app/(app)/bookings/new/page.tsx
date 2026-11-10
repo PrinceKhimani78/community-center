@@ -17,6 +17,7 @@ function NewOrEditBookingContent() {
   const editParam = searchParams.get("edit");
   const dateParam = searchParams.get("date") || undefined;
   const hallParam = searchParams.get("hall");
+  const customerParam = searchParams.get("customer") || undefined;
   const initialHall = HALL_OPTIONS.includes(hallParam as HallName)
     ? (hallParam as HallName)
     : undefined;
@@ -51,10 +52,11 @@ function NewOrEditBookingContent() {
       }
     >
       <NewBookingForm
-        key={editBooking?.id || `${dateParam || ""}-${initialHall || ""}`}
+        key={editBooking?.id || `${dateParam || ""}-${initialHall || ""}-${customerParam || ""}`}
         editBooking={editBooking}
         initialDateISO={dateParam}
         initialHall={initialHall}
+        initialCustomerId={customerParam}
       />
     </PageShell>
   );

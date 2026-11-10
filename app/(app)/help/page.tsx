@@ -13,7 +13,7 @@ const GUIDE_CONTENT: Record<HelpTab, { title: string; steps: string[] }> = {
     steps: [
       "1. Click Bookings on the left menu, then click the New Booking tab.",
       "2. Pick an existing person or tap + New Person to enter their name and mobile number.",
-      "3. Pick the Event Type, Hall (Ground Floor, First Floor, or Garden), and Date.",
+      "3. Pick the Event Type, Hall (Ground Floor or Ground + First Floor), and Date.",
       "4. Enter Rent, Deposit, and Advance Paid today, then tap Save Booking.",
     ],
   },

@@ -287,14 +287,14 @@ function BookingDetailsContent() {
               <span>Edit</span>
             </Link>
             <Link
-              href="/receipts"
+              href={`/invoices/${booking.receiptNo}?type=invoice`}
               className="min-h-[42px] rounded-xl bg-white border border-[#EFE4CC] text-[#0B2A5B] text-[13px] font-bold inline-flex items-center justify-center gap-1.5"
             >
               <FileText className="w-3.5 h-3.5" />
               <span>Invoice</span>
             </Link>
             <Link
-              href="/payments"
+              href={`/payments?booking=${booking.receiptNo}`}
               className="min-h-[42px] rounded-xl bg-[#0B2A5B] text-white text-[13px] font-bold inline-flex items-center justify-center gap-1.5"
             >
               <Plus className="w-3.5 h-3.5" />
@@ -352,7 +352,7 @@ function BookingDetailsContent() {
             </Link>
 
             <Link
-              href="/receipts"
+              href={`/invoices/${booking.receiptNo}?type=invoice`}
               style={{ minHeight: "40px" }}
               className="interactive-btn px-3.5 py-2 rounded-xl bg-white border border-[#0B2A5B]/30 text-[#0B2A5B] text-[13px] font-bold inline-flex items-center gap-1.5"
             >
@@ -361,7 +361,7 @@ function BookingDetailsContent() {
             </Link>
 
             <Link
-              href="/payments"
+              href={`/payments?booking=${booking.receiptNo}`}
               style={{
                 minHeight: "40px",
                 background: "linear-gradient(135deg, #071E47 0%, #0B2A5B 100%)",
@@ -576,7 +576,7 @@ function BookingDetailsContent() {
                           </td>
                           <td className="py-3 pl-3 text-right">
                             <Link
-                              href="/receipts"
+                              href={`/invoices/${booking.receiptNo}?type=payment`}
                               className="inline-flex items-center gap-1 text-[12px] font-bold text-[#0B2A5B] hover:text-[#C9971C]"
                             >
                               <Printer className="w-3.5 h-3.5" />
@@ -630,7 +630,7 @@ function BookingDetailsContent() {
 
                 <div className="space-y-2 text-[13px]">
                   <Link
-                    href="/maintenance?tab=check"
+                    href={`/inspections/${booking.receiptNo}`}
                     className={`flex items-center justify-between px-3 py-2 rounded-xl border ${
                       booking.preInspectionDone || booking.status === "Completed"
                         ? "bg-[#ECFDF5] border-[#BBF7D0]"
@@ -652,7 +652,7 @@ function BookingDetailsContent() {
                   </Link>
 
                   <Link
-                    href="/maintenance?tab=check"
+                    href={`/inspections/${booking.receiptNo}`}
                     className="flex items-center justify-between px-3 py-2 rounded-xl bg-[#FAF7F2] border border-[#EFE4CC]"
                   >
                     <span className="text-[#5B6474] font-medium">Post-event inspection</span>
@@ -664,7 +664,7 @@ function BookingDetailsContent() {
                   </Link>
 
                   <Link
-                    href="/payments?tab=refunds"
+                    href={`/deposits/${booking.receiptNo}`}
                     className="flex items-center justify-between px-3 py-2 rounded-xl bg-[#FAF7F2] border border-[#EFE4CC]"
                   >
                     <span className="text-[#5B6474] font-medium">Deposit refund</span>

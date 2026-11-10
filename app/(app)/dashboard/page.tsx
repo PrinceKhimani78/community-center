@@ -123,8 +123,8 @@ export default function DashboardPage() {
       labelColor: "#134E4A",
     },
     {
-      label: "Receipts",
-      href: "/receipts",
+      label: "Invoices & Receipts",
+      href: "/invoices/1048",
       icon: Receipt,
       cardBg: "#EEF0FF",
       cardBorder: "#D2D8FD",
@@ -150,8 +150,8 @@ export default function DashboardPage() {
       labelColor: "#78350F",
     },
     {
-      label: "Applicants",
-      href: "/applicants",
+      label: "Customers",
+      href: "/customers",
       icon: Users,
       cardBg: "#FFECEF",
       cardBorder: "#FACFD6",

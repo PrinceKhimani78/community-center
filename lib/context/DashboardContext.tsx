@@ -83,6 +83,10 @@ interface DashboardContextType {
   cancelBooking: (bookingId: string, reason?: string) => void;
   updateBookingStatus: (bookingId: string, status: BookingStatus) => void;
   addApplicant: (applicant: Omit<ApplicantRecord, "id">) => ApplicantRecord;
+  updateApplicant: (
+    applicantId: string,
+    updates: Partial<Omit<ApplicantRecord, "id">>
+  ) => void;
   recordPayment: (input: {
     bookingId: string;
     type: PaymentRecord["type"];
@@ -92,11 +96,22 @@ interface DashboardContextType {
   }) => PaymentRecord | null;
   addExpense: (input: Omit<ExpenseRecord, "id" | "dateLabel" | "status">) => void;
   processRefund: (refundId: string, deductionAmount?: number, note?: string) => void;
+  updateDepositRefund: (
+    refundId: string,
+    updates: Partial<Omit<DepositRefundRecord, "id">>
+  ) => void;
+  sendPaymentReminders: (count: number) => void;
   addMaintenanceTicket: (
-    input: Omit<MaintenanceTicket, "id" | "ticketNo" | "raisedBy" | "dateLabel" | "status">
+    input: Omit<MaintenanceTicket, "id" | "ticketNo" | "raisedBy" | "dateLabel" | "status"> & {
+      status?: MaintenanceTicket["status"];
+    }
   ) => MaintenanceTicket;
   updateTicketStatus: (ticketId: string, status: MaintenanceTicket["status"]) => void;
   setHallCheckItemStatus: (itemId: string, status: "OK" | "Issue", issueCost?: number, note?: string) => void;
+  saveInspectionToDepositRefund: (
+    bookingReceiptNo: string,
+    mode: "Before Event" | "After Event"
+  ) => void;
   toggleMyCheckIn: () => void;
   decideApproval: (approvalId: string, decision: "Approved" | "Rejected") => void;
   markAllNotificationsRead: () => void;
@@ -296,13 +311,27 @@ export function DashboardProvider({
 
   const addApplicant = useCallback(
     (input: Omit<ApplicantRecord, "id">) => {
+      const nextNum = 115 + applicants.length;
       const created: ApplicantRecord = {
         ...input,
         id: `app-${Date.now()}`,
+        customerCode: input.customerCode || `CU-0${nextNum}`,
+        memberSince: input.memberSince || "Oct 2026",
+        preferences: input.preferences || [],
       };
       setApplicants((prev) => [created, ...prev]);
-      appendLog("Booking", `Added applicant ${created.name}`, created.phone);
+      appendLog("Booking", `Added customer ${created.name}`, created.phone);
       return created;
+    },
+    [applicants.length, appendLog]
+  );
+
+  const updateApplicant = useCallback(
+    (applicantId: string, updates: Partial<Omit<ApplicantRecord, "id">>) => {
+      setApplicants((prev) =>
+        prev.map((a) => (a.id === applicantId ? { ...a, ...updates } : a))
+      );
+      appendLog("Booking", "Updated customer profile", applicantId);
     },
     [appendLog]
   );
@@ -394,22 +423,80 @@ export function DashboardProvider({
     [role, appendLog]
   );
 
+  const updateDepositRefund = useCallback(
+    (refundId: string, updates: Partial<Omit<DepositRefundRecord, "id">>) => {
+      setRefunds((prev) =>
+        prev.map((r) => (r.id === refundId ? { ...r, ...updates } : r))
+      );
+      if (updates.status) {
+        appendLog(
+          "Approval",
+          `Deposit refund ${updates.status.toLowerCase()}`,
+          `Refund ID ${refundId}`
+        );
+      }
+    },
+    [appendLog]
+  );
+
+  const sendPaymentReminders = useCallback(
+    (count: number) => {
+      appendLog(
+        "Payment",
+        `Sent in-app overdue reminders (${count})`,
+        "Pending balance alerts logged (WhatsApp/SMS in Phase 2)"
+      );
+    },
+    [appendLog]
+  );
+
   const addMaintenanceTicket = useCallback(
-    (input: Omit<MaintenanceTicket, "id" | "ticketNo" | "raisedBy" | "dateLabel" | "status">) => {
-      const nextNo = `MC-2026-0${112 + tickets.length}`;
+    (
+      input: Omit<MaintenanceTicket, "id" | "ticketNo" | "raisedBy" | "dateLabel" | "status"> & {
+        status?: MaintenanceTicket["status"];
+      }
+    ) => {
+      const maxNo = tickets.reduce((max, t) => {
+        const num = parseInt(t.ticketNo.split("-").pop() || "0", 10);
+        return Number.isFinite(num) && num > max ? num : max;
+      }, 112);
+      const nextNo = `MC-2026-${String(maxNo + 1).padStart(4, "0")}`;
+      const actor = role === "admin" ? "Admin" : "Manager";
+      const ticketStatus: MaintenanceTicket["status"] = input.status || "Pending";
       const created: MaintenanceTicket = {
         ...input,
         id: `mnt-${Date.now()}`,
         ticketNo: nextNo,
-        raisedBy: role === "admin" ? "Admin" : "Manager",
+        raisedBy: actor,
         dateLabel: "20 Oct 2026",
-        status: "Pending",
+        status: ticketStatus,
       };
       setTickets((prev) => [created, ...prev]);
-      appendLog("Maintenance", `Raised ticket ${nextNo}`, created.title);
+
+      if (ticketStatus !== "Draft" && created.estimatedCost > 2000) {
+        setApprovals((prev) => [
+          {
+            id: `apr-${Date.now()}`,
+            type: "Repair Cost",
+            title: created.title,
+            detail: `${created.location} · ${created.category}`,
+            amountLabel: `₹${created.estimatedCost.toLocaleString("en-IN")}`,
+            requester: actor,
+            referenceNo: nextNo,
+            status: "Pending",
+          },
+          ...prev,
+        ]);
+      }
+
+      appendLog(
+        "Maintenance",
+        ticketStatus === "Draft" ? `Saved draft ${nextNo}` : `Raised ticket ${nextNo}`,
+        created.title
+      );
       return created;
     },
-    [tickets.length, role, appendLog]
+    [tickets, role, appendLog]
   );
 
   const updateTicketStatus = useCallback(
@@ -428,7 +515,7 @@ export function DashboardProvider({
             ? {
                 ...item,
                 status,
-                issueCost: status === "OK" ? 0 : issueCost || 500,
+                issueCost: status === "OK" ? 0 : issueCost,
                 note: status === "OK" ? "" : note,
               }
             : item
@@ -436,6 +523,94 @@ export function DashboardProvider({
       );
     },
     []
+  );
+
+  const saveInspectionToDepositRefund = useCallback(
+    (bookingReceiptNo: string, mode: "Before Event" | "After Event") => {
+      const issues = hallCheckItems.filter((i) => i.status === "Issue");
+      const totalDeduction = issues.reduce((sum, i) => sum + (i.issueCost || 0), 0);
+      const deductionItems = issues.map((i) => ({
+        id: `ded-${i.id}`,
+        item: i.note ? `${i.label} (${i.note})` : i.label,
+        location: "Community Hall",
+        photosCount: 1,
+        amount: i.issueCost || 0,
+      }));
+      const deductionNote =
+        issues.length > 0
+          ? issues.map((i) => i.note || i.label).join(", ")
+          : "Hall checked — zero damage";
+
+      setBookings((prev) =>
+        prev.map((b) =>
+          b.receiptNo === bookingReceiptNo || b.id === bookingReceiptNo
+            ? {
+                ...b,
+                preInspectionDone: mode === "Before Event" ? true : b.preInspectionDone,
+                postInspectionDone: mode === "After Event" ? true : b.postInspectionDone,
+                depositStatus:
+                  mode === "After Event" ? "Ready to Refund" : b.depositStatus,
+              }
+            : b
+        )
+      );
+
+      if (mode === "After Event") {
+        setRefunds((prev) => {
+          const exists = prev.some((r) => r.bookingReceiptNo === bookingReceiptNo);
+          if (exists) {
+            return prev.map((r) =>
+              r.bookingReceiptNo === bookingReceiptNo
+                ? {
+                    ...r,
+                    deductionAmount: totalDeduction,
+                    deductionNote,
+                    deductionItems,
+                    inspectionRef: `INS-2026-${bookingReceiptNo}-B · ${issues.length} ${
+                      issues.length === 1 ? "issue" : "issues"
+                    }`,
+                    status: r.status === "Refunded" ? "Refunded" : "Ready to Refund",
+                  }
+                : r
+            );
+          }
+
+          const targetBooking = bookings.find(
+            (b) => b.receiptNo === bookingReceiptNo || b.id === bookingReceiptNo
+          );
+          if (!targetBooking) return prev;
+          return [
+            {
+              id: `ref-${Date.now()}`,
+              bookingReceiptNo: targetBooking.receiptNo,
+              applicantName: targetBooking.applicantName,
+              eventTitle: targetBooking.eventTitle,
+              eventDate: targetBooking.dateLabel,
+              heldAmount: targetBooking.deposit,
+              deductionAmount: totalDeduction,
+              deductionNote,
+              refundMode: targetBooking.paymentMode || "UPI",
+              status: "Ready to Refund",
+              collectedLabel: `₹${targetBooking.deposit.toLocaleString("en-IN")} · ${
+                targetBooking.paymentMode || "UPI"
+              }`,
+              inspectionRef: `INS-2026-${targetBooking.receiptNo}-B · ${issues.length} ${
+                issues.length === 1 ? "issue" : "issues"
+              }`,
+              deductionItems,
+            },
+            ...prev,
+          ];
+        });
+      }
+
+      appendLog(
+        "Maintenance",
+        `Saved ${mode} inspection for #${bookingReceiptNo}`,
+        `${issues.length} issue(s) · Total deduction ₹${totalDeduction.toLocaleString("en-IN")}`
+      );
+    },
+    [hallCheckItems, bookings, appendLog]
   );
 
   const toggleMyCheckIn = useCallback(() => {
@@ -513,12 +688,16 @@ export function DashboardProvider({
         cancelBooking,
         updateBookingStatus,
         addApplicant,
+        updateApplicant,
         recordPayment,
         addExpense,
         processRefund,
+        updateDepositRefund,
+        sendPaymentReminders,
         addMaintenanceTicket,
         updateTicketStatus,
         setHallCheckItemStatus,
+        saveInspectionToDepositRefund,
         toggleMyCheckIn,
         decideApproval,
         markAllNotificationsRead,

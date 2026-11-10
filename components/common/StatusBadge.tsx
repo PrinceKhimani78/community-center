@@ -12,6 +12,21 @@ const STATUS_STYLE_MAP: Record<
     border: "#BBF7D0",
     pulseDot: "#16A34A",
   },
+  Paid: {
+    bg: "#DCFCE7",
+    color: "#15803D",
+    border: "#BBF7D0",
+  },
+  Partial: {
+    bg: "#FEF3C7",
+    color: "#92400E",
+    border: "#FDE68A",
+  },
+  Held: {
+    bg: "#DBEAFE",
+    color: "#1D4ED8",
+    border: "#BFDBFE",
+  },
   Approved: {
     bg: "#DBEAFE",
     color: "#1D4ED8",
@@ -71,6 +86,26 @@ const STATUS_STYLE_MAP: Record<
     bg: "#FEE2E2",
     color: "#C62828",
     border: "#FECACA",
+  },
+  High: {
+    bg: "#FEE2E2",
+    color: "#C62828",
+    border: "#FECACA",
+  },
+  Medium: {
+    bg: "#FEF3C7",
+    color: "#92400E",
+    border: "#FDE68A",
+  },
+  Low: {
+    bg: "#DCFCE7",
+    color: "#15803D",
+    border: "#BBF7D0",
+  },
+  Draft: {
+    bg: "#F1F5F9",
+    color: "#4B5563",
+    border: "#E2E8F0",
   },
   Normal: {
     bg: "#FAF5EB",

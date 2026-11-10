@@ -1,23 +1,17 @@
 "use client";
 
-import React, { Suspense, useState } from "react";
-import { useSearchParams } from "next/navigation";
+import React, { Suspense, useMemo, useState } from "react";
 import Link from "next/link";
-import {
-  Wallet,
-  History,
-  RotateCcw,
-  ReceiptText,
-  CheckCircle2,
-  Printer,
-} from "lucide-react";
+import { useSearchParams } from "next/navigation";
+import { AlertTriangle, ArrowRight, CheckCircle2, Plus, Printer } from "lucide-react";
 import { useDashboard } from "@/lib/context/DashboardContext";
-import { PaymentMode, PaymentRecord } from "@/lib/mock/dashboard";
+import type { PaymentMode, PaymentRecord } from "@/lib/mock/dashboard";
 import PageShell from "@/components/common/PageShell";
-import TabBar, { TabItem } from "@/components/common/TabBar";
 import StatusBadge from "@/components/common/StatusBadge";
+import { getBookingBalance } from "@/lib/utils/bookings";
 
-type PaymentTab = "collect" | "history" | "refunds" | "expenses";
+type FinanceTab = "payments" | "expenses" | "refunds";
+type PaymentFilter = "All" | "Rent" | "Deposit";
 
 function PaymentsContent() {
   const searchParams = useSearchParams();
@@ -28,58 +22,114 @@ function PaymentsContent() {
     refunds,
     recordPayment,
     addExpense,
-    processRefund,
+    sendPaymentReminders,
   } = useDashboard();
 
-  const initialTabParam = searchParams.get("tab");
-  const resolvedParamTab: PaymentTab =
-    initialTabParam === "refunds"
-      ? "refunds"
-      : initialTabParam === "history"
-      ? "history"
-      : initialTabParam === "expenses"
+  const tabParam = searchParams.get("tab");
+  const bookingParam = searchParams.get("booking");
+
+  const resolvedTab: FinanceTab =
+    tabParam === "expenses"
       ? "expenses"
-      : "collect";
-  const [tabState, setTabState] = useState<{ param: string | null; tab: PaymentTab }>({
-    param: initialTabParam,
-    tab: resolvedParamTab,
+      : tabParam === "refunds"
+      ? "refunds"
+      : "payments";
+
+  const [tabState, setTabState] = useState<{ param: string | null; tab: FinanceTab }>({
+    param: tabParam,
+    tab: resolvedTab,
   });
-  const activeTab = tabState.param === initialTabParam ? tabState.tab : resolvedParamTab;
-  const setActiveTab = (tab: PaymentTab) => setTabState({ param: initialTabParam, tab });
+  const activeTab = tabState.param === tabParam ? tabState.tab : resolvedTab;
+  const setActiveTab = (tab: FinanceTab) => setTabState({ param: tabParam, tab });
 
-  const bookingsWithBalance = bookings.filter(
-    (b) => !b.isFreeUse && b.rent + b.deposit - b.paid > 0
+  const [paymentFilter, setPaymentFilter] = useState<PaymentFilter>("All");
+  const [remindersSentMsg, setRemindersSentMsg] = useState<string | null>(null);
+
+  const bookingsWithBalance = useMemo(
+    () => bookings.filter((b) => getBookingBalance(b) > 0),
+    [bookings]
   );
 
-  const [selectedBookingId, setSelectedBookingId] = useState(
-    bookingsWithBalance[0]?.id || bookings[0]?.id || ""
-  );
+  const defaultSelectedBooking = useMemo(() => {
+    if (bookingParam) {
+      const match = bookings.find(
+        (b) => b.receiptNo === bookingParam || b.id === bookingParam
+      );
+      if (match) return match.id;
+    }
+    return bookingsWithBalance[0]?.id || bookings[0]?.id || "";
+  }, [bookingParam, bookings, bookingsWithBalance]);
+
+  const [selectedBookingId, setSelectedBookingId] = useState(defaultSelectedBooking);
   const [payType, setPayType] = useState<PaymentRecord["type"]>("Rent Balance");
-  const [amount, setAmount] = useState<number>(4000);
-  const [mode, setMode] = useState<PaymentMode>("Cash");
+  const [amount, setAmount] = useState<number>(() => {
+    const target = bookings.find((b) => b.id === defaultSelectedBooking);
+    return target ? getBookingBalance(target) || 5000 : 5000;
+  });
+  const [mode, setMode] = useState<PaymentMode>("UPI");
   const [reference, setReference] = useState("");
-  const [lastReceipt, setLastReceipt] = useState<string | null>(null);
+  const [savedReceiptInfo, setSavedReceiptInfo] = useState<{
+    receiptNo: string;
+    bookingNo: string;
+  } | null>(null);
 
   // Expense form
+  const [showExpenseForm, setShowExpenseForm] = useState(false);
   const [expTitle, setExpTitle] = useState("");
-  const [expCategory, setExpCategory] = useState<"Cleaning" | "Electricity" | "Water" | "Repair" | "Supplies">("Cleaning");
+  const [expCategory, setExpCategory] = useState<
+    "Cleaning" | "Electricity" | "Water" | "Repair" | "Supplies"
+  >("Cleaning");
   const [expAmount, setExpAmount] = useState(500);
   const [expPaidTo, setExpPaidTo] = useState("");
   const [expSaved, setExpSaved] = useState(false);
 
-  const selectedBooking = bookings.find((b) => b.id === selectedBookingId);
-  const selectedRemaining = selectedBooking
-    ? Math.max(0, selectedBooking.rent + selectedBooking.deposit - selectedBooking.paid)
-    : 0;
+  const kpis = useMemo(() => {
+    const collected = payments.reduce((s, p) => s + p.amount, 0);
+    const pending = bookingsWithBalance.reduce((s, b) => s + getBookingBalance(b), 0);
+    const overdueBookings = bookingsWithBalance.filter((b) =>
+      (b.notes || "").toLowerCase().includes("overdue")
+    );
+    const overdueAmt = overdueBookings.reduce((s, b) => s + getBookingBalance(b), 0);
+    const depositsHeld = refunds
+      .filter((r) => r.status !== "Refunded")
+      .reduce((s, r) => s + r.heldAmount, 0) +
+      bookings
+        .filter(
+          (b) =>
+            b.status !== "Cancelled" &&
+            b.deposit > 0 &&
+            !refunds.some((r) => r.bookingReceiptNo === b.receiptNo)
+        )
+        .reduce((s, b) => s + b.deposit, 0);
+    const totalExpenses = expenses.reduce((s, e) => s + e.amount, 0);
+    return {
+      collected,
+      pending,
+      overdueAmt,
+      overdueBookings,
+      depositsHeld,
+      totalExpenses,
+    };
+  }, [payments, bookingsWithBalance, refunds, bookings, expenses]);
 
-  const tabs: TabItem<PaymentTab>[] = [
-    { id: "collect", label: "Collect Money", icon: Wallet },
-    { id: "history", label: "Payment History", icon: History, count: payments.length },
-    { id: "refunds", label: "Refund Deposit", icon: RotateCcw, count: refunds.length },
-    { id: "expenses", label: "Expenses", icon: ReceiptText, count: expenses.length },
-  ];
+  const filteredPayments = useMemo(() => {
+    if (paymentFilter === "All") return payments;
+    if (paymentFilter === "Deposit") {
+      return payments.filter((p) => p.type === "Security Deposit");
+    }
+    return payments.filter((p) => p.type !== "Security Deposit");
+  }, [payments, paymentFilter]);
 
-  const handleCollectSubmit = (e: React.FormEvent) => {
+  const handleBookingChange = (nextId: string) => {
+    setSelectedBookingId(nextId);
+    const target = bookings.find((b) => b.id === nextId);
+    if (target) {
+      const due = getBookingBalance(target);
+      if (due > 0) setAmount(due);
+    }
+  };
+
+  const handleRecordPayment = (e: React.FormEvent) => {
     e.preventDefault();
     const rec = recordPayment({
       bookingId: selectedBookingId,
@@ -89,7 +139,7 @@ function PaymentsContent() {
       reference,
     });
     if (rec) {
-      setLastReceipt(rec.receiptNo);
+      setSavedReceiptInfo({ receiptNo: rec.receiptNo, bookingNo: rec.bookingReceiptNo });
       setReference("");
     }
   };
@@ -105,415 +155,547 @@ function PaymentsContent() {
     });
     setExpTitle("");
     setExpPaidTo("");
+    setShowExpenseForm(false);
     setExpSaved(true);
   };
 
+  const handleSendReminders = () => {
+    const count = Math.max(1, kpis.overdueBookings.length);
+    sendPaymentReminders(count);
+    setRemindersSentMsg(
+      `In-app payment reminder logged for ${count} booking(s). WhatsApp/SMS delivery arrives in Phase 2.`
+    );
+  };
+
   return (
-    <PageShell
-      title="Payments & Money"
-      subtitle="Collect booking money, give receipts, refund deposits, or log expenses."
-    >
-      <TabBar tabs={tabs} activeTab={activeTab} onChange={setActiveTab} ariaLabel="Payments tabs" />
+    <PageShell hideHeader>
+      <div className="space-y-4">
+        {/* Heading + Deposit Refunds shortcut */}
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <div className="text-[12px] font-medium text-[#5B6474]">
+              Finance · Rent, deposits & expenses
+            </div>
+            <h1 style={{ color: "#0B2A5B", fontSize: "23px", fontWeight: 700 }}>
+              Payments & Expenses
+            </h1>
+          </div>
 
-      <div key={activeTab} className="animate-tab-enter">
-        {activeTab === "collect" && (
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
-            <form
-              onSubmit={handleCollectSubmit}
-              style={{
-                backgroundColor: "#FFFFFF",
-                border: "1.5px solid rgba(226, 181, 68, 0.35)",
-                borderRadius: "18px",
-                padding: "24px",
-              }}
-              className="lg:col-span-7 space-y-4"
+          <Link
+            href="/deposits/1045"
+            style={{ minHeight: "40px" }}
+            className="interactive-btn px-4 py-2 rounded-xl bg-white border border-[#EFE4CC] text-[#0B2A5B] text-[13px] font-bold inline-flex items-center gap-1.5"
+          >
+            <span>Deposit Refunds</span>
+            <ArrowRight className="w-3.5 h-3.5 text-[#C9971C]" />
+          </Link>
+        </div>
+
+        {/* 5 KPI Cards (matches 4.10) */}
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+          <div className="bg-white rounded-2xl border border-[#EFE4CC] p-4">
+            <div className="text-[12px] font-medium text-[#5B6474]">Collected · Oct</div>
+            <div className="notranslate text-[22px] font-extrabold text-[#15803D] mt-1">
+              ₹{kpis.collected.toLocaleString("en-IN")}
+            </div>
+          </div>
+          <div className="bg-white rounded-2xl border border-[#EFE4CC] p-4">
+            <div className="text-[12px] font-medium text-[#5B6474]">Pending</div>
+            <div className="notranslate text-[22px] font-extrabold text-[#0B2A5B] mt-1">
+              ₹{kpis.pending.toLocaleString("en-IN")}
+            </div>
+          </div>
+          <div className="rounded-2xl border border-[#FECACA] bg-[#FEF2F2] p-4">
+            <div className="text-[12px] font-medium text-[#C62828]">Overdue</div>
+            <div className="notranslate text-[22px] font-extrabold text-[#C62828] mt-1">
+              ₹{kpis.overdueAmt.toLocaleString("en-IN")}
+            </div>
+          </div>
+          <div className="bg-white rounded-2xl border border-[#EFE4CC] p-4">
+            <div className="text-[12px] font-medium text-[#5B6474]">Deposits Held</div>
+            <div className="notranslate text-[22px] font-extrabold text-[#0B2A5B] mt-1">
+              ₹{kpis.depositsHeld.toLocaleString("en-IN")}
+            </div>
+          </div>
+          <div className="bg-white rounded-2xl border border-[#EFE4CC] p-4 col-span-2 md:col-span-1">
+            <div className="text-[12px] font-medium text-[#5B6474]">Expenses · Oct</div>
+            <div className="notranslate text-[22px] font-extrabold text-[#8A6510] mt-1">
+              ₹{kpis.totalExpenses.toLocaleString("en-IN")}
+            </div>
+          </div>
+        </div>
+
+        {/* Overdue Alert Banner */}
+        {bookingsWithBalance.length > 0 && (
+          <div className="rounded-2xl border border-[#FECACA] bg-[#FEF2F2] px-4 py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="flex items-start sm:items-center gap-2.5 text-[13px] text-[#991B1B]">
+              <AlertTriangle className="w-4 h-4 text-[#C62828] shrink-0 mt-0.5 sm:mt-0" />
+              <span>
+                <strong>
+                  {Math.max(1, kpis.overdueBookings.length)} payment(s) need attention.
+                </strong>{" "}
+                {kpis.overdueBookings[0]
+                  ? `${kpis.overdueBookings[0].eventTitle} · ${kpis.overdueBookings[0].applicantName} (₹${getBookingBalance(
+                      kpis.overdueBookings[0]
+                    ).toLocaleString("en-IN")} due).`
+                  : `${bookingsWithBalance.length} bookings have open balances.`}
+              </span>
+            </div>
+
+            <button
+              type="button"
+              onClick={handleSendReminders}
+              className="interactive-btn px-4 py-2 rounded-xl bg-[#C62828] text-white text-[12.5px] font-bold shrink-0 cursor-pointer"
             >
-              <h2 style={{ color: "#0B2A5B", fontSize: "17px", fontWeight: 700 }}>
-                Record a Payment
-              </h2>
+              Send reminders
+            </button>
+          </div>
+        )}
 
-              {lastReceipt && (
-                <div className="p-4 rounded-xl bg-emerald-50 border border-emerald-200 flex flex-wrap items-center justify-between gap-3 animate-check-pop">
-                  <div className="flex items-center gap-2 text-emerald-800 text-[13.5px] font-semibold">
-                    <CheckCircle2 className="w-5 h-5 text-emerald-600" />
-                    <span>Payment saved! Receipt {lastReceipt} created.</span>
-                  </div>
-                  <Link
-                    href="/receipts"
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#0B2A5B] text-white text-[12.5px] font-semibold"
+        {remindersSentMsg && (
+          <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-[#15803D] text-[13px] font-semibold flex items-center gap-2 animate-check-pop">
+            <CheckCircle2 className="w-4 h-4 shrink-0" />
+            <span>{remindersSentMsg}</span>
+          </div>
+        )}
+
+        {/* MAIN 2-COLUMN BODY */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
+          {/* LEFT 8 COLS — PAYMENTS / EXPENSES / DEPOSIT REFUNDS */}
+          <div className="lg:col-span-8 bg-white rounded-2xl border border-[#EFE4CC] overflow-hidden shadow-2xs">
+            {/* Tabs + Filter Header */}
+            <div className="flex flex-wrap items-center justify-between gap-3 px-5 border-b border-[#F1ECE1]">
+              <div className="flex items-center gap-6">
+                {(
+                  [
+                    { id: "payments", label: "Payments" },
+                    { id: "expenses", label: "Expenses" },
+                    { id: "refunds", label: "Deposit Refunds" },
+                  ] as const
+                ).map((t) => (
+                  <button
+                    key={t.id}
+                    type="button"
+                    onClick={() => setActiveTab(t.id)}
+                    className={`py-3.5 text-[14px] font-bold border-b-2 cursor-pointer transition-colors ${
+                      activeTab === t.id
+                        ? "border-[#0B2A5B] text-[#0B2A5B]"
+                        : "border-transparent text-[#5B6474] hover:text-[#0B2A5B]"
+                    }`}
                   >
-                    <Printer className="w-3.5 h-3.5" />
-                    <span>Print Receipt</span>
-                  </Link>
-                </div>
-              )}
-
-              <div>
-                <label className="block text-[13px] font-semibold text-[#14213D] mb-1.5">
-                  1. Select Booking
-                </label>
-                <select
-                  value={selectedBookingId}
-                  onChange={(e) => {
-                    const id = e.target.value;
-                    setSelectedBookingId(id);
-                    const b = bookings.find((x) => x.id === id);
-                    if (b) {
-                      setAmount(Math.max(0, b.rent + b.deposit - b.paid));
-                    }
-                  }}
-                  style={{ minHeight: "46px" }}
-                  className="w-full rounded-xl border border-[#E5D9BF] bg-[#FAF7F2] px-3.5 text-[14px] font-medium text-[#0B2A5B]"
-                >
-                  {bookings.map((b) => {
-                    const rem = Math.max(0, b.rent + b.deposit - b.paid);
-                    return (
-                      <option key={b.id} value={b.id}>
-                        #{b.receiptNo} · {b.applicantName} ({b.eventTitle}) — Due: ₹
-                        {rem.toLocaleString("en-IN")}
-                      </option>
-                    );
-                  })}
-                </select>
+                    {t.label}
+                  </button>
+                ))}
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-[13px] font-semibold text-[#14213D] mb-1.5">
-                    2. Payment For
-                  </label>
-                  <select
-                    value={payType}
-                    onChange={(e) => setPayType(e.target.value as PaymentRecord["type"])}
-                    style={{ minHeight: "46px" }}
-                    className="w-full rounded-xl border border-[#E5D9BF] bg-[#FAF7F2] px-3.5 text-[14px]"
-                  >
-                    <option value="Rent Balance">Rent Balance</option>
-                    <option value="Advance">Advance</option>
-                    <option value="Security Deposit">Security Deposit</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-[13px] font-semibold text-[#14213D] mb-1.5">
-                    3. Amount Received (₹)
-                  </label>
-                  <input
-                    type="number"
-                    min={1}
-                    value={amount}
-                    onChange={(e) => setAmount(Number(e.target.value))}
-                    style={{ minHeight: "46px" }}
-                    className="w-full rounded-xl border border-[#E5D9BF] bg-[#FAF7F2] px-3.5 text-[15px] font-bold text-[#0B2A5B]"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-[13px] font-semibold text-[#14213D] mb-2">
-                  4. How was money paid?
-                </label>
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
-                  {(["Cash", "UPI", "Bank Transfer", "Cheque"] as PaymentMode[]).map((m) => (
+              {activeTab === "payments" && (
+                <div className="flex items-center gap-1.5 py-2">
+                  {(["All", "Rent", "Deposit"] as const).map((f) => (
                     <button
-                      key={m}
+                      key={f}
                       type="button"
-                      onClick={() => setMode(m)}
-                      style={{ minHeight: "44px" }}
-                      className={`rounded-xl text-[13px] font-semibold cursor-pointer transition-all ${
-                        mode === m
-                          ? "bg-[#0B2A5B] text-white border-2 border-[#E2B544] shadow-sm"
-                          : "bg-[#FAF5EB] text-[#0B2A5B] border border-[#EFE4CC] hover:border-[#E2B544]"
+                      onClick={() => setPaymentFilter(f)}
+                      className={`px-3 py-1 rounded-full text-[12px] font-semibold cursor-pointer border transition-all ${
+                        paymentFilter === f
+                          ? "bg-[#0B2A5B] text-white border-[#0B2A5B]"
+                          : "bg-white text-[#14213D] border-[#EFE4CC]"
                       }`}
                     >
-                      {m}
+                      {f}
                     </button>
                   ))}
                 </div>
+              )}
+
+              {activeTab === "expenses" && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowExpenseForm((v) => !v);
+                    setExpSaved(false);
+                  }}
+                  className="my-2 px-3 py-1.5 rounded-xl bg-[#0B2A5B] text-white text-[12px] font-bold inline-flex items-center gap-1 cursor-pointer"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>Add Expense</span>
+                </button>
+              )}
+            </div>
+
+            {/* Payments Tab Table */}
+            {activeTab === "payments" && (
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse min-w-[600px] text-[13.5px]">
+                  <thead>
+                    <tr className="border-b border-[#F1ECE1] bg-[#FAF7F2]/60 text-[12px] text-[#5B6474]">
+                      <th className="py-3 px-5 font-semibold">Customer</th>
+                      <th className="py-3 px-3 font-semibold">Type</th>
+                      <th className="py-3 px-3 font-semibold">Mode</th>
+                      <th className="py-3 px-3 font-semibold">Date</th>
+                      <th className="py-3 px-3 text-right font-semibold">Amount</th>
+                      <th className="py-3 px-5 text-right font-semibold">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-[#F1ECE1]">
+                    {filteredPayments.map((p) => {
+                      const booking = bookings.find(
+                        (b) => b.id === p.bookingId || b.receiptNo === p.bookingReceiptNo
+                      );
+                      const balance = booking ? getBookingBalance(booking) : 0;
+                      const statusLabel =
+                        p.type === "Security Deposit"
+                          ? "Held"
+                          : balance > 0
+                          ? "Pending"
+                          : "Confirmed";
+
+                      return (
+                        <tr key={p.id} className="hover:bg-[#FAF7F2]/70">
+                          <td className="py-3.5 px-5">
+                            <Link
+                              href={`/invoices/${p.bookingReceiptNo}?type=payment`}
+                              className="font-bold text-[#0B2A5B] hover:text-[#C9971C] block"
+                            >
+                              {p.applicantName}
+                            </Link>
+                            <span className="notranslate text-[11.5px] text-[#5B6474]">
+                              {p.receiptNo}
+                            </span>
+                          </td>
+                          <td className="py-3.5 px-3 text-[#14213D]">{p.type}</td>
+                          <td className="py-3.5 px-3 text-[#5B6474]">{p.mode}</td>
+                          <td className="py-3.5 px-3 text-[#5B6474]">{p.dateLabel}</td>
+                          <td className="notranslate py-3.5 px-3 text-right font-bold text-[#0B2A5B]">
+                            ₹{p.amount.toLocaleString("en-IN")}
+                          </td>
+                          <td className="py-3.5 px-5 text-right">
+                            <div className="inline-flex items-center gap-2">
+                              <StatusBadge
+                                status={
+                                  statusLabel === "Confirmed"
+                                    ? "Paid"
+                                    : statusLabel === "Pending"
+                                    ? "Partial"
+                                    : "Held"
+                                }
+                              />
+                              <Link
+                                href={`/invoices/${p.bookingReceiptNo}?type=payment`}
+                                className="text-[#0B2A5B] hover:text-[#C9971C]"
+                                title="View Receipt"
+                              >
+                                <Printer className="w-3.5 h-3.5" />
+                              </Link>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
               </div>
+            )}
 
-              <div>
-                <label className="block text-[13px] font-semibold text-[#14213D] mb-1.5">
-                  Reference / Note (Optional)
-                </label>
-                <input
-                  type="text"
-                  value={reference}
-                  onChange={(e) => setReference(e.target.value)}
-                  placeholder="UPI ID, cheque number, or cash note"
-                  style={{ minHeight: "46px" }}
-                  className="w-full rounded-xl border border-[#E5D9BF] bg-[#FAF7F2] px-3.5 text-[14px]"
-                />
-              </div>
+            {/* Expenses Tab */}
+            {activeTab === "expenses" && (
+              <div className="p-5 space-y-4">
+                {expSaved && (
+                  <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-[#15803D] text-[13px] font-semibold flex items-center gap-2">
+                    <CheckCircle2 className="w-4 h-4" />
+                    <span>Expense logged and sent for approval if required.</span>
+                  </div>
+                )}
 
-              <button
-                type="submit"
-                style={{
-                  minHeight: "48px",
-                  background: "linear-gradient(135deg, #F7E6A9 0%, #E2B544 55%, #C9971C 100%)",
-                  color: "#041535",
-                  borderRadius: "12px",
-                }}
-                className="interactive-btn w-full text-[14.5px] font-bold cursor-pointer"
-              >
-                Save Payment & Make Receipt
-              </button>
-            </form>
-
-            {/* Quick Pending Balances List */}
-            <div
-              style={{
-                backgroundColor: "#FFFFFF",
-                border: "1.5px solid rgba(226, 181, 68, 0.35)",
-                borderRadius: "18px",
-                padding: "22px",
-              }}
-              className="lg:col-span-5 space-y-3"
-            >
-              <div className="flex items-center justify-between">
-                <h3 style={{ color: "#0B2A5B", fontSize: "16px", fontWeight: 700 }}>
-                  Bookings With Balance Left
-                </h3>
-                <span className="text-[12px] font-bold text-[#C62828]">
-                  Selected due: ₹{selectedRemaining.toLocaleString("en-IN")}
-                </span>
-              </div>
-
-              <div className="space-y-2.5">
-                {bookingsWithBalance.map((b) => {
-                  const due = Math.max(0, b.rent + b.deposit - b.paid);
-                  const active = b.id === selectedBookingId;
-                  return (
-                    <button
-                      key={b.id}
-                      type="button"
-                      onClick={() => {
-                        setSelectedBookingId(b.id);
-                        setAmount(due);
-                      }}
-                      className={`interactive-row w-full text-left p-3.5 rounded-xl border cursor-pointer flex items-center justify-between gap-2 ${
-                        active
-                          ? "bg-[#EFF6FF] border-[#0B2A5B]"
-                          : "bg-[#FAF7F2] border-[#EFE4CC]"
-                      }`}
-                    >
-                      <div className="min-w-0">
-                        <div className="font-bold text-[#0B2A5B] text-[13.5px] truncate">
-                          {b.applicantName}
-                        </div>
-                        <div className="text-[12px] text-[#5B6474] truncate">
-                          #{b.receiptNo} · {b.eventTitle} ({b.dateLabel})
-                        </div>
+                {showExpenseForm && (
+                  <form
+                    onSubmit={handleExpenseSubmit}
+                    className="p-4 rounded-xl bg-[#FAF7F2] border border-[#E2B544] space-y-3"
+                  >
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-[12px] font-semibold text-[#14213D] mb-1">
+                          Expense Description *
+                        </label>
+                        <input
+                          type="text"
+                          required
+                          value={expTitle}
+                          onChange={(e) => setExpTitle(e.target.value)}
+                          placeholder="e.g. Hall cleaning supplies"
+                          className="w-full h-10 rounded-xl border border-[#E5D9BF] bg-white px-3 text-[13px]"
+                        />
                       </div>
-                      <span className="font-extrabold text-[#C62828] text-[14px] shrink-0">
-                        ₹{due.toLocaleString("en-IN")}
-                      </span>
-                    </button>
+                      <div>
+                        <label className="block text-[12px] font-semibold text-[#14213D] mb-1">
+                          Category
+                        </label>
+                        <select
+                          value={expCategory}
+                          onChange={(e) =>
+                            setExpCategory(e.target.value as typeof expCategory)
+                          }
+                          className="w-full h-10 rounded-xl border border-[#E5D9BF] bg-white px-3 text-[13px]"
+                        >
+                          <option value="Cleaning">Cleaning</option>
+                          <option value="Electricity">Electricity</option>
+                          <option value="Water">Water</option>
+                          <option value="Repair">Repair</option>
+                          <option value="Supplies">Supplies</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-[12px] font-semibold text-[#14213D] mb-1">
+                          Amount (₹)
+                        </label>
+                        <input
+                          type="number"
+                          min={1}
+                          value={expAmount}
+                          onChange={(e) => setExpAmount(Number(e.target.value))}
+                          className="w-full h-10 rounded-xl border border-[#E5D9BF] bg-white px-3 text-[13px] font-bold"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[12px] font-semibold text-[#14213D] mb-1">
+                          Paid To
+                        </label>
+                        <input
+                          type="text"
+                          value={expPaidTo}
+                          onChange={(e) => setExpPaidTo(e.target.value)}
+                          placeholder="Vendor name"
+                          className="w-full h-10 rounded-xl border border-[#E5D9BF] bg-white px-3 text-[13px]"
+                        />
+                      </div>
+                    </div>
+                    <div className="flex justify-end gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setShowExpenseForm(false)}
+                        className="px-3 py-1.5 rounded-lg border border-[#EFE4CC] text-[12.5px] font-semibold cursor-pointer"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="submit"
+                        className="px-4 py-1.5 rounded-lg bg-[#0B2A5B] text-white text-[12.5px] font-bold cursor-pointer"
+                      >
+                        Save Expense
+                      </button>
+                    </div>
+                  </form>
+                )}
+
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left border-collapse min-w-[540px] text-[13.5px]">
+                    <thead>
+                      <tr className="border-b border-[#F1ECE1] text-[12px] text-[#5B6474]">
+                        <th className="py-2.5 pr-3 font-semibold">Expense</th>
+                        <th className="py-2.5 px-3 font-semibold">Category</th>
+                        <th className="py-2.5 px-3 font-semibold">Paid To</th>
+                        <th className="py-2.5 px-3 font-semibold">Date</th>
+                        <th className="py-2.5 px-3 text-right font-semibold">Amount</th>
+                        <th className="py-2.5 pl-3 text-right font-semibold">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-[#F1ECE1]">
+                      {expenses.map((ex) => (
+                        <tr key={ex.id}>
+                          <td className="py-3.5 pr-3 font-bold text-[#0B2A5B]">{ex.title}</td>
+                          <td className="py-3.5 px-3 text-[#5B6474]">{ex.category}</td>
+                          <td className="py-3.5 px-3 text-[#14213D]">{ex.paidTo}</td>
+                          <td className="py-3.5 px-3 text-[#5B6474]">{ex.dateLabel}</td>
+                          <td className="notranslate py-3.5 px-3 text-right font-bold text-[#C62828]">
+                            ₹{ex.amount.toLocaleString("en-IN")}
+                          </td>
+                          <td className="py-3.5 pl-3 text-right">
+                            <StatusBadge status={ex.status} />
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
+            {/* Deposit Refunds Quick List */}
+            {activeTab === "refunds" && (
+              <div className="p-5 space-y-3">
+                {refunds.map((r) => {
+                  const net = Math.max(0, r.heldAmount - r.deductionAmount);
+                  return (
+                    <div
+                      key={r.id}
+                      className="rounded-xl border border-[#EFE4CC] bg-[#FAF7F2]/60 p-4 flex flex-wrap items-center justify-between gap-3"
+                    >
+                      <div>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="font-bold text-[#0B2A5B] text-[15px]">
+                            {r.applicantName} · {r.eventTitle}
+                          </span>
+                          <StatusBadge status={r.status} />
+                        </div>
+                        <p className="text-[12.5px] text-[#5B6474] mt-0.5">
+                          <span className="notranslate">#{r.bookingReceiptNo}</span> ·{" "}
+                          {r.eventDate} · Held ₹{r.heldAmount.toLocaleString("en-IN")} − Deduction ₹
+                          {r.deductionAmount.toLocaleString("en-IN")} = Refund{" "}
+                          <strong className="text-[#15803D]">
+                            ₹{net.toLocaleString("en-IN")}
+                          </strong>
+                        </p>
+                      </div>
+
+                      <Link
+                        href={`/deposits/${r.bookingReceiptNo}`}
+                        className="interactive-btn px-3.5 py-2 rounded-xl bg-[#0B2A5B] text-white text-[12.5px] font-bold inline-flex items-center gap-1"
+                      >
+                        <span>Open Workflow</span>
+                        <ArrowRight className="w-3.5 h-3.5" />
+                      </Link>
+                    </div>
                   );
                 })}
               </div>
-            </div>
+            )}
           </div>
-        )}
 
-        {activeTab === "history" && (
-          <div className="space-y-3">
-            {payments.map((p, idx) => (
-              <div
-                key={p.id}
-                style={{ animationDelay: `${idx * 35}ms` }}
-                className="interactive-row animate-fade-up flex flex-wrap items-center justify-between gap-4 p-4 rounded-2xl bg-white border border-[#EFE4CC]"
-              >
-                <div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-[12px] font-bold px-2 py-0.5 rounded bg-[#FAF5EB] text-[#0B2A5B] border border-[#EFE4CC]">
-                      {p.receiptNo}
-                    </span>
-                    <span className="font-bold text-[#0B2A5B] text-[15px]">{p.applicantName}</span>
-                  </div>
-                  <p className="text-[13px] text-[#5B6474] mt-1">
-                    {p.eventTitle} · {p.type} · Paid via <strong>{p.mode}</strong> on {p.dateLabel}
-                  </p>
-                </div>
+          {/* RIGHT 4 COLS — RECORD PAYMENT FORM (matches 4.10) */}
+          <form
+            onSubmit={handleRecordPayment}
+            className="lg:col-span-4 bg-white rounded-2xl border border-[#EFE4CC] p-5 space-y-4 shadow-2xs"
+          >
+            <h2 style={{ color: "#0B2A5B", fontSize: "17px", fontWeight: 700 }}>
+              Record Payment
+            </h2>
 
-                <div className="flex items-center gap-3">
-                  <span className="text-[18px] font-extrabold text-[#15803D]">
-                    ₹{p.amount.toLocaleString("en-IN")}
-                  </span>
-                  <Link
-                    href="/receipts"
-                    style={{ minHeight: "40px" }}
-                    className="interactive-btn px-3.5 py-2 rounded-xl bg-[#FAF5EB] border border-[#E2B544] text-[#0B2A5B] text-[12.5px] font-semibold inline-flex items-center gap-1.5"
-                  >
-                    <Printer className="w-3.5 h-3.5" />
-                    <span>Receipt</span>
-                  </Link>
+            {savedReceiptInfo && (
+              <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-[#15803D] text-[12.5px] font-semibold space-y-1.5 animate-check-pop">
+                <div className="flex items-center gap-1.5">
+                  <CheckCircle2 className="w-4 h-4 shrink-0" />
+                  <span>Saved receipt {savedReceiptInfo.receiptNo}</span>
                 </div>
+                <Link
+                  href={`/invoices/${savedReceiptInfo.bookingNo}?type=payment`}
+                  className="inline-flex items-center gap-1 text-[#0B2A5B] underline font-bold"
+                >
+                  Open Printable Receipt →
+                </Link>
               </div>
-            ))}
-          </div>
-        )}
+            )}
 
-        {activeTab === "refunds" && (
-          <div className="space-y-3.5">
-            {refunds.map((r) => {
-              const netRefund = Math.max(0, r.heldAmount - r.deductionAmount);
-              return (
-                <div
-                  key={r.id}
-                  className="interactive-card bg-white rounded-2xl border border-[#EFE4CC] p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4"
-                >
-                  <div className="space-y-1">
-                    <div className="flex items-center gap-2.5 flex-wrap">
-                      <h3 className="font-bold text-[#0B2A5B] text-[16px]">
-                        {r.applicantName} · {r.eventTitle}
-                      </h3>
-                      <StatusBadge status={r.status} />
-                    </div>
-                    <p className="text-[13px] text-[#5B6474]">
-                      Booking #{r.bookingReceiptNo} ({r.eventDate}) · {r.deductionNote}
-                    </p>
-                    <p className="text-[13px] text-[#14213D]">
-                      Held: <strong>₹{r.heldAmount.toLocaleString("en-IN")}</strong> − Deduction:{" "}
-                      <strong>₹{r.deductionAmount.toLocaleString("en-IN")}</strong> = Refund:{" "}
-                      <strong className="text-[#15803D]">
-                        ₹{netRefund.toLocaleString("en-IN")}
-                      </strong>
-                    </p>
-                  </div>
-
-                  {r.status === "Ready to Refund" && (
-                    <button
-                      type="button"
-                      onClick={() => processRefund(r.id, r.deductionAmount, r.deductionNote)}
-                      style={{
-                        minHeight: "44px",
-                        background: "linear-gradient(135deg, #071E47 0%, #0B2A5B 100%)",
-                        color: "#FFFFFF",
-                        borderRadius: "10px",
-                      }}
-                      className="interactive-btn px-4 py-2 text-[13.5px] font-semibold cursor-pointer shrink-0"
-                    >
-                      Refund ₹{netRefund.toLocaleString("en-IN")}
-                    </button>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        )}
-
-        {activeTab === "expenses" && (
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
-            <div className="lg:col-span-7 space-y-3">
-              {expenses.map((ex) => (
-                <div
-                  key={ex.id}
-                  className="interactive-row bg-white rounded-2xl border border-[#EFE4CC] p-4 flex items-center justify-between gap-3"
-                >
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <span className="font-bold text-[#0B2A5B] text-[14.5px]">{ex.title}</span>
-                      <StatusBadge status={ex.status} />
-                    </div>
-                    <p className="text-[12.5px] text-[#5B6474] mt-0.5">
-                      {ex.category} · Paid to {ex.paidTo} · {ex.dateLabel}
-                    </p>
-                  </div>
-                  <span className="text-[16px] font-extrabold text-[#C62828] shrink-0">
-                    ₹{ex.amount.toLocaleString("en-IN")}
-                  </span>
-                </div>
-              ))}
+            <div>
+              <label className="block text-[12px] font-semibold text-[#14213D] mb-1.5">
+                Booking
+              </label>
+              <select
+                value={selectedBookingId}
+                onChange={(e) => handleBookingChange(e.target.value)}
+                style={{ minHeight: "42px" }}
+                className="w-full rounded-xl border border-[#E5D9BF] bg-[#FAF7F2] px-3 text-[13px] font-semibold text-[#0B2A5B] focus:outline-none focus:ring-2 focus:ring-[#E2B544]"
+              >
+                {bookings
+                  .filter((b) => b.status !== "Cancelled" && !b.isFreeUse)
+                  .map((b) => {
+                    const due = getBookingBalance(b);
+                    return (
+                      <option key={b.id} value={b.id}>
+                        BK-2026-{b.receiptNo} · {b.applicantName} ·{" "}
+                        {due > 0 ? `₹${due.toLocaleString("en-IN")} due` : "Paid"}
+                      </option>
+                    );
+                  })}
+              </select>
             </div>
 
-            <form
-              onSubmit={handleExpenseSubmit}
-              className="lg:col-span-5 bg-white rounded-2xl border border-[#EFE4CC] p-5 space-y-3.5"
+            <div>
+              <label className="block text-[12px] font-semibold text-[#14213D] mb-1.5">
+                Payment Type
+              </label>
+              <select
+                value={payType}
+                onChange={(e) => setPayType(e.target.value as PaymentRecord["type"])}
+                style={{ minHeight: "42px" }}
+                className="w-full rounded-xl border border-[#E5D9BF] bg-[#FAF7F2] px-3 text-[13px] font-semibold text-[#0B2A5B] focus:outline-none focus:ring-2 focus:ring-[#E2B544]"
+              >
+                <option value="Rent Balance">Rent (balance)</option>
+                <option value="Advance">Rent advance</option>
+                <option value="Security Deposit">Security deposit</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-[12px] font-semibold text-[#14213D] mb-1.5">
+                Amount (₹)
+              </label>
+              <input
+                type="number"
+                min={1}
+                required
+                value={amount}
+                onChange={(e) => setAmount(Number(e.target.value))}
+                style={{ minHeight: "42px" }}
+                className="w-full rounded-xl border border-[#E5D9BF] bg-[#FAF7F2] px-3.5 text-[14px] font-bold text-[#0B2A5B] focus:outline-none focus:ring-2 focus:ring-[#E2B544]"
+              />
+            </div>
+
+            <div>
+              <label className="block text-[12px] font-semibold text-[#14213D] mb-1.5">
+                Mode
+              </label>
+              <div className="grid grid-cols-4 gap-1.5">
+                {(
+                  [
+                    { value: "UPI", label: "UPI" },
+                    { value: "Cash", label: "Cash" },
+                    { value: "Bank Transfer", label: "Bank" },
+                    { value: "Cheque", label: "Cheque" },
+                  ] as const
+                ).map((m) => (
+                  <button
+                    key={m.value}
+                    type="button"
+                    onClick={() => setMode(m.value)}
+                    className={`py-2 rounded-xl text-[12px] font-bold border cursor-pointer transition-all ${
+                      mode === m.value
+                        ? "bg-[#0B2A5B] text-white border-[#0B2A5B]"
+                        : "bg-white text-[#14213D] border-[#EFE4CC]"
+                    }`}
+                  >
+                    {m.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-[12px] font-semibold text-[#14213D] mb-1.5">
+                Reference / UTR
+              </label>
+              <input
+                type="text"
+                value={reference}
+                onChange={(e) => setReference(e.target.value)}
+                placeholder="e.g. 4291 8833 1102"
+                style={{ minHeight: "42px" }}
+                className="w-full rounded-xl border border-[#E5D9BF] bg-[#FAF7F2] px-3.5 text-[13px] focus:outline-none focus:ring-2 focus:ring-[#E2B544]"
+              />
+            </div>
+
+            <button
+              type="submit"
+              style={{
+                minHeight: "46px",
+                background: "linear-gradient(135deg, #071E47 0%, #0B2A5B 100%)",
+                color: "#FFFFFF",
+                borderRadius: "12px",
+              }}
+              className="interactive-btn w-full text-[13.5px] font-bold cursor-pointer"
             >
-              <h3 className="font-bold text-[#0B2A5B] text-[16px]">+ Add Centre Expense</h3>
-              {expSaved && (
-                <div className="p-2.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-700 text-[12.5px] font-semibold">
-                  Expense added!
-                </div>
-              )}
-              <div>
-                <label className="block text-[12.5px] font-semibold text-[#14213D] mb-1">
-                  What was spent on?
-                </label>
-                <input
-                  type="text"
-                  value={expTitle}
-                  onChange={(e) => setExpTitle(e.target.value)}
-                  placeholder="e.g. Cleaning soap & brooms"
-                  style={{ minHeight: "44px" }}
-                  className="w-full rounded-xl border border-[#E5D9BF] bg-[#FAF7F2] px-3 text-[13.5px]"
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-[12.5px] font-semibold text-[#14213D] mb-1">
-                    Type
-                  </label>
-                  <select
-                    value={expCategory}
-                    onChange={(e) =>
-                      setExpCategory(
-                        e.target.value as
-                          | "Cleaning"
-                          | "Electricity"
-                          | "Water"
-                          | "Repair"
-                          | "Supplies"
-                      )
-                    }
-                    style={{ minHeight: "44px" }}
-                    className="w-full rounded-xl border border-[#E5D9BF] bg-[#FAF7F2] px-3 text-[13.5px]"
-                  >
-                    <option value="Cleaning">Cleaning</option>
-                    <option value="Electricity">Electricity</option>
-                    <option value="Water">Water</option>
-                    <option value="Repair">Repair</option>
-                    <option value="Supplies">Supplies</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-[12.5px] font-semibold text-[#14213D] mb-1">
-                    Amount (₹)
-                  </label>
-                  <input
-                    type="number"
-                    min={1}
-                    value={expAmount}
-                    onChange={(e) => setExpAmount(Number(e.target.value))}
-                    style={{ minHeight: "44px" }}
-                    className="w-full rounded-xl border border-[#E5D9BF] bg-[#FAF7F2] px-3 text-[13.5px] font-bold"
-                  />
-                </div>
-              </div>
-              <div>
-                <label className="block text-[12.5px] font-semibold text-[#14213D] mb-1">
-                  Paid To
-                </label>
-                <input
-                  type="text"
-                  value={expPaidTo}
-                  onChange={(e) => setExpPaidTo(e.target.value)}
-                  placeholder="Shop or person name"
-                  style={{ minHeight: "44px" }}
-                  className="w-full rounded-xl border border-[#E5D9BF] bg-[#FAF7F2] px-3 text-[13.5px]"
-                />
-              </div>
-              <button
-                type="submit"
-                style={{ minHeight: "44px" }}
-                className="interactive-btn w-full rounded-xl bg-[#0B2A5B] text-white text-[13.5px] font-bold cursor-pointer"
-              >
-                Save Expense
-              </button>
-            </form>
-          </div>
-        )}
+              Save & Generate Receipt
+            </button>
+          </form>
+        </div>
       </div>
     </PageShell>
   );

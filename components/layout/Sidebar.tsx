@@ -11,7 +11,9 @@ import {
   Calendar,
   CreditCard,
   Receipt,
+  RotateCcw,
   Wrench,
+  ClipboardCheck,
   UserCheck,
   Users,
   Settings,
@@ -33,11 +35,13 @@ const MAIN_NAV_ITEMS: NavItem[] = [
   { label: "Notifications", href: "/notifications", icon: Bell, badge: "actionCount" },
   { label: "Bookings", href: "/bookings", icon: CalendarDays },
   { label: "Calendar", href: "/calendar", icon: Calendar },
+  { label: "Customers", href: "/customers", icon: Users },
   { label: "Payments", href: "/payments", icon: CreditCard },
-  { label: "Receipts", href: "/receipts", icon: Receipt },
+  { label: "Deposit Refunds", href: "/deposits/1045", icon: RotateCcw },
+  { label: "Invoices & Receipts", href: "/invoices/1048", icon: Receipt },
   { label: "Maintenance", href: "/maintenance", icon: Wrench },
+  { label: "Inspections", href: "/inspections/1048", icon: ClipboardCheck },
   { label: "Attendance", href: "/attendance", icon: UserCheck },
-  { label: "Booking Applicants", href: "/applicants", icon: Users },
 ];
 
 const ADMIN_NAV_ITEMS: NavItem[] = [
@@ -67,9 +71,14 @@ export default function Sidebar() {
       <ul className="space-y-1">
         {items.map((item) => {
           const Icon = item.icon;
+          const basePrefix = `/${item.href.split("/").filter(Boolean)[0] || ""}`;
           const isActive =
             pathname === item.href ||
-            (item.href !== "/dashboard" && pathname.startsWith(item.href));
+            (item.href !== "/dashboard" &&
+              (pathname.startsWith(item.href) ||
+                (basePrefix !== "/" && pathname.startsWith(basePrefix)) ||
+                (basePrefix === "/customers" && pathname.startsWith("/applicants")) ||
+                (basePrefix === "/invoices" && pathname.startsWith("/receipts"))));
           const isHovered = hoveredHref === item.href;
 
           let itemBg = "transparent";

@@ -28,6 +28,7 @@ interface NewBookingFormProps {
   editBooking?: BookingRecord;
   initialDateISO?: string;
   initialHall?: HallName;
+  initialCustomerId?: string;
   onSaved?: (receiptNo: string) => void;
 }
 
@@ -49,6 +50,7 @@ export default function NewBookingForm({
   editBooking,
   initialDateISO,
   initialHall,
+  initialCustomerId,
   onSaved,
 }: NewBookingFormProps) {
   const router = useRouter();
@@ -60,13 +62,29 @@ export default function NewBookingForm({
   const [customerMode, setCustomerMode] = useState<"existing" | "new">("existing");
   const [customerQuery, setCustomerQuery] = useState("");
   const [selectedApplicantId, setSelectedApplicantId] = useState(
-    editBooking?.applicantId || applicants[0]?.id || ""
+    editBooking?.applicantId || initialCustomerId || applicants[0]?.id || ""
   );
   const [newName, setNewName] = useState("");
   const [newPhone, setNewPhone] = useState("");
   const [newAddress, setNewAddress] = useState("");
 
-  const [eventType, setEventType] = useState(editBooking?.eventType || "Wedding");
+  const isPresetEventType = (val?: string) =>
+    Boolean(val && EVENT_TYPES.includes(val as (typeof EVENT_TYPES)[number]) && val !== "Others");
+
+  const [eventType, setEventType] = useState(
+    editBooking?.eventType
+      ? isPresetEventType(editBooking.eventType)
+        ? editBooking.eventType
+        : "Others"
+      : "Wedding"
+  );
+  const [customOccasion, setCustomOccasion] = useState(
+    editBooking?.eventType && !isPresetEventType(editBooking.eventType)
+      ? editBooking.eventType === "Others"
+        ? ""
+        : editBooking.eventType
+      : ""
+  );
   const [hall, setHall] = useState<HallName>(
     editBooking?.hall || initialHall || "Ground + First Floor"
   );
@@ -182,6 +200,14 @@ export default function NewBookingForm({
       return;
     }
 
+    const resolvedEventType =
+      eventType === "Others" ? customOccasion.trim() : eventType;
+
+    if (!resolvedEventType) {
+      setFormError("Please enter the name of the occasion.");
+      return;
+    }
+
     let applicantId = selectedApplicantId;
     const selectedApplicant = applicants.find((a) => a.id === selectedApplicantId);
     let applicantName = selectedApplicant?.name || "";
@@ -214,14 +240,14 @@ export default function NewBookingForm({
         : formattedStart;
     const combinedTiming = `${startTime.trim() || "10:00 AM"} – ${endTime.trim() || "10:00 PM"}`;
     const eventTitle = isFreeUse
-      ? `${eventType} (free use)`
+      ? `${resolvedEventType} (free use)`
       : totalDays > 1
-      ? `${eventType} (${totalDays} days)`
-      : eventType;
+      ? `${resolvedEventType} (${totalDays} days)`
+      : resolvedEventType;
 
     const payload = {
       eventTitle,
-      eventType,
+      eventType: resolvedEventType,
       applicantId,
       applicantName,
       phone,
@@ -311,6 +337,42 @@ export default function NewBookingForm({
     );
   }
 
+  const eventTypeField = (
+    <div>
+      <label className="block text-[12.5px] font-semibold text-[#14213D] mb-1.5">
+        Event Type *
+      </label>
+      <select
+        value={eventType}
+        onChange={(e) => setEventType(e.target.value)}
+        style={{ minHeight: "44px" }}
+        className="w-full rounded-xl border border-[#E5D9BF] bg-[#FAF7F2] px-3.5 text-[13.5px] text-[#0B2A5B] font-medium focus:outline-none focus:ring-2 focus:ring-[#E2B544]"
+      >
+        {EVENT_TYPES.map((type) => (
+          <option key={type} value={type}>
+            {type}
+          </option>
+        ))}
+      </select>
+      {eventType === "Others" && (
+        <div className="mt-2.5 animate-tab-enter">
+          <label className="block text-[12.5px] font-semibold text-[#14213D] mb-1.5">
+            Name of Occasion *
+          </label>
+          <input
+            type="text"
+            required
+            value={customOccasion}
+            onChange={(e) => setCustomOccasion(e.target.value)}
+            placeholder="e.g. Aqiqah, Naming Ceremony, Majlis..."
+            style={{ minHeight: "44px" }}
+            className="w-full rounded-xl border border-[#E2B544] bg-[#FFFDF7] px-3.5 text-[13.5px] text-[#0B2A5B] font-medium focus:outline-none focus:ring-2 focus:ring-[#E2B544]"
+          />
+        </div>
+      )}
+    </div>
+  );
+
   return (
     <form onSubmit={handleSubmit} className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
       {/* LEFT COLUMN — FORM CARDS */}
@@ -377,23 +439,7 @@ export default function NewBookingForm({
                 </select>
               </div>
 
-              <div>
-                <label className="block text-[12.5px] font-semibold text-[#14213D] mb-1.5">
-                  Event Type *
-                </label>
-                <select
-                  value={eventType}
-                  onChange={(e) => setEventType(e.target.value)}
-                  style={{ minHeight: "44px" }}
-                  className="w-full rounded-xl border border-[#E5D9BF] bg-[#FAF7F2] px-3.5 text-[13.5px] text-[#0B2A5B] font-medium focus:outline-none focus:ring-2 focus:ring-[#E2B544]"
-                >
-                  {EVENT_TYPES.map((type) => (
-                    <option key={type} value={type}>
-                      {type}
-                    </option>
-                  ))}
-                </select>
-              </div>
+              {eventTypeField}
             </div>
           ) : (
             <div className="space-y-3.5">
@@ -439,23 +485,7 @@ export default function NewBookingForm({
                     className="w-full rounded-xl border border-[#E5D9BF] bg-[#FAF7F2] px-3.5 text-[13.5px] focus:outline-none focus:ring-2 focus:ring-[#E2B544]"
                   />
                 </div>
-                <div>
-                  <label className="block text-[12.5px] font-semibold text-[#14213D] mb-1.5">
-                    Event Type *
-                  </label>
-                  <select
-                    value={eventType}
-                    onChange={(e) => setEventType(e.target.value)}
-                    style={{ minHeight: "44px" }}
-                    className="w-full rounded-xl border border-[#E5D9BF] bg-[#FAF7F2] px-3.5 text-[13.5px] text-[#0B2A5B] font-medium focus:outline-none focus:ring-2 focus:ring-[#E2B544]"
-                  >
-                    {EVENT_TYPES.map((type) => (
-                      <option key={type} value={type}>
-                        {type}
-                      </option>
-                    ))}
-                  </select>
-                </div>
+                {eventTypeField}
               </div>
             </div>
           )}

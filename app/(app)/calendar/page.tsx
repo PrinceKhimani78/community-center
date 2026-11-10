@@ -54,7 +54,7 @@ export default function CalendarPage() {
 
   // Maintenance block panel state
   const [showBlockForm, setShowBlockForm] = useState(false);
-  const [blockLocation, setBlockLocation] = useState<string>("Garden Lawn");
+  const [blockLocation, setBlockLocation] = useState<string>("Ground Floor");
   const [blockDateISO, setBlockDateISO] = useState<string>("2026-10-26");
   const [blockReason, setBlockReason] = useState("");
   const [blockSavedMsg, setBlockSavedMsg] = useState<string | null>(null);
@@ -387,7 +387,7 @@ export default function CalendarPage() {
                   type="text"
                   value={blockReason}
                   onChange={(e) => setBlockReason(e.target.value)}
-                  placeholder="e.g. Lawn lighting repair"
+                  placeholder="e.g. A.C. servicing, lighting repair"
                   style={{ minHeight: "42px" }}
                   className="w-full rounded-xl border border-[#E5D9BF] bg-[#FAF7F2] px-3 text-[13px]"
                 />

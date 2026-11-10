@@ -19,7 +19,7 @@ export interface ComingUpBooking {
   month: string;
   title: string;
   applicant: string;
-  hall: "Ground Floor" | "Ground + First Floor" | "Garden Lawn";
+  hall: "Ground Floor" | "Ground + First Floor";
   isAC?: boolean;
   status: "Confirmed" | "Pending" | "Awaiting approval";
   balanceDue?: string;
@@ -42,7 +42,7 @@ export interface MoneyToCollectInfo {
   overdueCount: number;
 }
 
-export type HallName = "Ground Floor" | "Ground + First Floor" | "Garden Lawn";
+export type HallName = "Ground Floor" | "Ground + First Floor";
 
 export interface BookingRecord {
   id: string;
@@ -70,17 +70,20 @@ export interface BookingRecord {
   createdBy?: string;
   preInspectionDone?: boolean;
   postInspectionDone?: boolean;
-  depositStatus?: "Held" | "Awaiting inspection" | "Refunded" | "N/A";
+  depositStatus?: "Held" | "Awaiting inspection" | "Ready to Refund" | "Refunded" | "N/A";
   cancellationReason?: string;
 }
 
 export interface ApplicantRecord {
   id: string;
+  customerCode?: string;
   name: string;
   phone: string;
   address: string;
   idProofMasked: string;
   notes: string;
+  memberSince?: string;
+  preferences?: string[];
 }
 
 export type PaymentMode = "Cash" | "UPI" | "Bank Transfer" | "Cheque";
@@ -109,6 +112,14 @@ export interface ExpenseRecord {
   status: "Approved" | "Pending";
 }
 
+export interface DepositDeductionItem {
+  id: string;
+  item: string;
+  location: string;
+  photosCount: number;
+  amount: number;
+}
+
 export interface DepositRefundRecord {
   id: string;
   bookingReceiptNo: string;
@@ -120,21 +131,47 @@ export interface DepositRefundRecord {
   deductionNote: string;
   refundMode: PaymentMode;
   status: "Ready to Refund" | "Sent for Approval" | "Refunded";
+  collectedLabel?: string;
+  inspectionRef?: string;
+  upiOrAccount?: string;
+  remarks?: string;
+  deductionItems?: DepositDeductionItem[];
+}
+
+export interface MaintenanceQuotation {
+  id: string;
+  vendor: string;
+  fileName: string;
+  amount: number;
 }
 
 export interface MaintenanceTicket {
   id: string;
   ticketNo: string;
   title: string;
-  category: "Plumbing" | "Electrical" | "AC / Fans" | "Furniture" | "Cleaning";
+  category:
+    | "Plumbing"
+    | "Electrical"
+    | "AC / Fans"
+    | "Carpentry"
+    | "Civil"
+    | "Furniture"
+    | "Cleaning";
+  subCategory?: string;
   location: string;
-  priority: "Normal" | "Urgent";
+  priority: "Low" | "Medium" | "High" | "Normal" | "Urgent";
   estimatedCost: number;
   raisedBy: string;
   dateLabel: string;
-  status: "Pending" | "In Progress" | "Completed";
+  status: "Pending" | "Approved" | "In Progress" | "Completed" | "Draft";
+  description?: string;
+  attachmentsLabel?: string;
+  quotations?: MaintenanceQuotation[];
+  photos?: string[];
   blockHall?: boolean;
   blockDateISO?: string;
+  blockFrom?: string;
+  blockTo?: string;
 }
 
 export interface HallCheckItem {
@@ -154,6 +191,9 @@ export interface StaffAttendanceRecord {
   checkOutTime: string;
   geoVerified: boolean;
   status: "Present" | "Late" | "Absent";
+  presentDays?: number;
+  lateDays?: number;
+  absentDays?: number;
 }
 
 export interface ApprovalItem {
@@ -237,7 +277,7 @@ export const INITIAL_ACTION_ITEMS: ActionItem[] = [
     detail: "Tomorrow 9:00 AM · Ground + First Floor",
     buttonLabel: "Start check",
     successMessage: "Check started · removed from your list",
-    linkUrl: "/maintenance?tab=check",
+    linkUrl: "/inspections/1048",
   },
   {
     id: "act-4",
@@ -325,67 +365,91 @@ export const UPCOMING_BOOKINGS: ComingUpBooking[] = [
 export const INITIAL_APPLICANTS: ApplicantRecord[] = [
   {
     id: "app-1",
+    customerCode: "CU-0087",
     name: "Mr. Imran Patel",
     phone: "+91 98250 11223",
     address: "Station Road, Dhari, Amreli",
-    idProofMasked: "XXXX-XXXX-4821",
-    notes: "Needs extra 100 chairs on Ground Floor.",
+    idProofMasked: "Aadhaar · XXXX 4821",
+    notes: "Needs extra 100 chairs on Ground Floor. Regular community patron.",
+    memberSince: "Dec 2025",
+    preferences: ["Prefers Ground + First Floor", "Pays by UPI", "Own caterer"],
   },
   {
     id: "app-2",
+    customerCode: "CU-0092",
     name: "Mrs. Rukhsana Patel",
     phone: "+91 98791 44556",
     address: "Vora Bazaar, Dhari",
-    idProofMasked: "XXXX-XXXX-9104",
+    idProofMasked: "Aadhaar · XXXX 9104",
     notes: "Prefer UPI receipts on WhatsApp later.",
+    memberSince: "Feb 2026",
+    preferences: ["A.C. hall required", "Bank Transfer"],
   },
   {
     id: "app-3",
+    customerCode: "CU-0014",
     name: "Jamat Committee",
     phone: "+91 94262 77889",
     address: "Main Masjid Street, Dhari",
     idProofMasked: "TRUST-REG-2019",
     notes: "Community gathering — trustee free-use approval required.",
+    memberSince: "Jan 2024",
+    preferences: ["Free community use", "Ground Floor", "Extra mic setup"],
   },
   {
     id: "app-4",
+    customerCode: "CU-0104",
     name: "Mr. Faizan Ahmed",
     phone: "+91 99099 22334",
     address: "Gondal Road, Dhari",
-    idProofMasked: "XXXX-XXXX-3319",
+    idProofMasked: "Aadhaar · XXXX 3319",
     notes: "Balance reminder requested before event.",
+    memberSince: "May 2026",
+    preferences: ["Cash payments", "Daytime events"],
   },
   {
     id: "app-5",
+    customerCode: "CU-0076",
     name: "Mr. Salim Shaikh",
     phone: "+91 97240 66778",
     address: "Amreli Naka, Dhari",
-    idProofMasked: "XXXX-XXXX-6670",
+    idProofMasked: "Aadhaar · XXXX 6670",
     notes: "Evening family function.",
+    memberSince: "Nov 2025",
+    preferences: ["Ground Floor", "Evening slot"],
   },
   {
     id: "app-6",
+    customerCode: "CU-0051",
     name: "Mr. Arif Valibhoy",
     phone: "+91 98242 55441",
     address: "Bagasara Road, Dhari",
-    idProofMasked: "XXXX-XXXX-7732",
+    idProofMasked: "Aadhaar · XXXX 7732",
     notes: "2-day Nikah booking with A.C. hall.",
+    memberSince: "Aug 2025",
+    preferences: ["Multi-day events", "A.C. hall", "Cheque payments"],
   },
   {
     id: "app-7",
+    customerCode: "CU-0068",
     name: "Mr. Aslam Ghanchi",
     phone: "+91 94277 88990",
     address: "Patel Chowk, Dhari",
-    idProofMasked: "XXXX-XXXX-5518",
+    idProofMasked: "Aadhaar · XXXX 5518",
     notes: "Hall left clean after 17 Oct wedding.",
+    memberSince: "Oct 2025",
+    preferences: ["Cash payments", "Full hall"],
   },
   {
     id: "app-8",
+    customerCode: "CU-0112",
     name: "Ms. Nazia Kureshi",
     phone: "+91 96620 44120",
     address: "Station Road, Dhari",
-    idProofMasked: "XXXX-XXXX-2204",
+    idProofMasked: "Aadhaar · XXXX 2204",
     notes: "Cancelled 06 Oct booking due to family travel.",
+    memberSince: "Sep 2026",
+    preferences: ["Ground Floor", "Pays by UPI"],
   },
 ];
 
@@ -581,7 +645,7 @@ export const INITIAL_BOOKINGS: BookingRecord[] = [
     applicantId: "app-8",
     applicantName: "Ms. Nazia Kureshi",
     phone: "+91 96620 44120",
-    hall: "Garden Lawn",
+    hall: "Ground Floor",
     isAC: false,
     dateISO: "2026-10-06",
     dateLabel: "06 Oct 2026",
@@ -712,6 +776,43 @@ export const INITIAL_DEPOSIT_REFUNDS: DepositRefundRecord[] = [
     deductionNote: "Hall checked — zero damage",
     refundMode: "Cash",
     status: "Ready to Refund",
+    collectedLabel: "₹5,000 · Cash · 14 Oct",
+    inspectionRef: "INS-2026-1045-B · 0 issues",
+    upiOrAccount: "Cash at office counter",
+    remarks: "All 7 inspection points passed cleanly after wedding.",
+    deductionItems: [],
+  },
+  {
+    id: "ref-3",
+    bookingReceiptNo: "1048",
+    applicantName: "Mr. Imran Patel",
+    eventTitle: "Wedding",
+    eventDate: "20 Oct 2026",
+    heldAmount: 5000,
+    deductionAmount: 1200,
+    deductionNote: "Broken chairs × 2 & stage wall mark",
+    refundMode: "UPI",
+    status: "Sent for Approval",
+    collectedLabel: "₹5,000 · UPI · 15 Oct",
+    inspectionRef: "INS-2026-1048-B · 2 issues",
+    upiOrAccount: "imranpatel@okaxis",
+    remarks: "Deductions agreed with customer after post-event hall check.",
+    deductionItems: [
+      {
+        id: "ded-1",
+        item: "Broken chairs × 2",
+        location: "Ground Floor · seating",
+        photosCount: 2,
+        amount: 800,
+      },
+      {
+        id: "ded-2",
+        item: "Wall stain near stage",
+        location: "Ground Floor · stage",
+        photosCount: 1,
+        amount: 400,
+      },
+    ],
   },
   {
     id: "ref-2",
@@ -724,65 +825,143 @@ export const INITIAL_DEPOSIT_REFUNDS: DepositRefundRecord[] = [
     deductionNote: "2 plastic chairs broken",
     refundMode: "UPI",
     status: "Refunded",
+    collectedLabel: "₹3,000 · UPI · 08 Oct",
+    inspectionRef: "INS-2026-1042-B · 1 issue",
+    upiOrAccount: "yusuf.mansuri@okicici",
+    remarks: "Settled via UPI transfer.",
+    deductionItems: [
+      {
+        id: "ded-3",
+        item: "2 plastic chairs broken",
+        location: "Ground Floor · hall",
+        photosCount: 1,
+        amount: 500,
+      },
+    ],
   },
 ];
 
 export const INITIAL_MAINTENANCE_TICKETS: MaintenanceTicket[] = [
   {
-    id: "mnt-1",
-    ticketNo: "MC-2026-0110",
-    title: "Water leakage in Ground Floor washroom",
-    category: "Plumbing",
-    location: "Ground Floor Washroom",
-    priority: "Urgent",
-    estimatedCost: 1850,
+    id: "mnt-0",
+    ticketNo: "MC-2026-0112",
+    title: "Lights not working in Ground Floor hall",
+    category: "Electrical",
+    subCategory: "Lighting",
+    location: "Ground Floor",
+    priority: "High",
+    estimatedCost: 5000,
     raisedBy: "Manager",
-    dateLabel: "19 Oct 2026",
-    status: "In Progress",
+    dateLabel: "15 Oct 2026",
+    status: "Pending",
+    attachmentsLabel: "2 attachments",
+    description: "6 of 18 ceiling panels are off since 14 Oct.",
   },
   {
     id: "mnt-2",
     ticketNo: "MC-2026-0111",
     title: "First Floor A.C. unit #2 servicing",
     category: "AC / Fans",
-    location: "First Floor Hall",
-    priority: "Normal",
+    subCategory: "Air Conditioner",
+    location: "Ground + First Floor",
+    priority: "High",
     estimatedCost: 2200,
-    raisedBy: "Staff",
-    dateLabel: "20 Oct 2026",
-    status: "Pending",
+    raisedBy: "Manager",
+    dateLabel: "12 Oct 2026",
+    status: "Approved",
+    attachmentsLabel: "1 quotation",
     blockHall: true,
     blockDateISO: "2026-10-26",
+  },
+  {
+    id: "mnt-1",
+    ticketNo: "MC-2026-0110",
+    title: "Water leakage in Ground Floor washroom",
+    category: "Plumbing",
+    subCategory: "Leakage",
+    location: "Ground Floor Washroom",
+    priority: "Medium",
+    estimatedCost: 1850,
+    raisedBy: "Staff",
+    dateLabel: "10 Oct 2026",
+    status: "In Progress",
+    attachmentsLabel: "3 photos",
+  },
+  {
+    id: "mnt-4",
+    ticketNo: "MC-2026-0109",
+    title: "Entrance & courtyard lighting repair",
+    category: "Electrical",
+    subCategory: "Outdoor",
+    location: "Entrance",
+    priority: "Medium",
+    estimatedCost: 3400,
+    raisedBy: "Manager",
+    dateLabel: "08 Oct 2026",
+    status: "In Progress",
+    attachmentsLabel: "2 quotations",
+  },
+  {
+    id: "mnt-5",
+    ticketNo: "MC-2026-0107",
+    title: "Kitchen exhaust fan noise & servicing",
+    category: "Electrical",
+    subCategory: "Fans",
+    location: "Kitchen",
+    priority: "Medium",
+    estimatedCost: 3800,
+    raisedBy: "Staff",
+    dateLabel: "05 Oct 2026",
+    status: "Pending",
+    attachmentsLabel: "1 quotation",
   },
   {
     id: "mnt-3",
     ticketNo: "MC-2026-0108",
     title: "Stage LED spotlight bulb replaced",
     category: "Electrical",
-    location: "Ground Floor Stage",
-    priority: "Normal",
+    subCategory: "Audio & Stage",
+    location: "Ground Floor",
+    priority: "Low",
     estimatedCost: 650,
     raisedBy: "Manager",
-    dateLabel: "16 Oct 2026",
+    dateLabel: "03 Oct 2026",
     status: "Completed",
+    attachmentsLabel: "1 photo",
+  },
+  {
+    id: "mnt-6",
+    ticketNo: "MC-2026-0106",
+    title: "Stage curtain rail & hinge repair",
+    category: "Carpentry",
+    subCategory: "Fixtures",
+    location: "Ground Floor",
+    priority: "Low",
+    estimatedCost: 1800,
+    raisedBy: "Staff",
+    dateLabel: "01 Oct 2026",
+    status: "Completed",
+    attachmentsLabel: "2 photos",
   },
 ];
 
 export const INITIAL_HALL_CHECK_ITEMS: HallCheckItem[] = [
-  { id: "chk-1", label: "Chairs & Tables", helper: "Counted & unbroken", status: "OK", issueCost: 0, note: "" },
-  { id: "chk-2", label: "Lights & Switches", helper: "Stage + hall bulbs working", status: "OK", issueCost: 0, note: "" },
-  { id: "chk-3", label: "Fans & A.C.", helper: "Cooling & remotes returned", status: "OK", issueCost: 0, note: "" },
-  { id: "chk-4", label: "Sound & Mic", helper: "Speakers + wireless mics safe", status: "OK", issueCost: 0, note: "" },
-  { id: "chk-5", label: "Washrooms", helper: "Clean & taps closed properly", status: "OK", issueCost: 0, note: "" },
-  { id: "chk-6", label: "Kitchen Area", helper: "Gas, counters & sink clean", status: "OK", issueCost: 0, note: "" },
-  { id: "chk-7", label: "Floors & Walls", helper: "No stains or wall tape marks", status: "OK", issueCost: 0, note: "" },
+  { id: "chk-1", label: "Chairs & tables count", helper: "Counted & unbroken (seating rows)", status: "OK", issueCost: 0, note: "" },
+  { id: "chk-2", label: "Lights & electrical", helper: "All panels, switches & sockets", status: "OK", issueCost: 0, note: "" },
+  { id: "chk-3", label: "Fans & air conditioning", helper: "Fans, AC units & remotes returned", status: "OK", issueCost: 0, note: "" },
+  { id: "chk-4", label: "Sound system & stage", helper: "Mic, speakers, stage lights", status: "OK", issueCost: 0, note: "" },
+  { id: "chk-5", label: "Washrooms", helper: "Taps, flush, cleanliness", status: "OK", issueCost: 0, note: "" },
+  { id: "chk-6", label: "Kitchen & utensils", helper: "Gas, sinks, utensil count", status: "OK", issueCost: 0, note: "" },
+  { id: "chk-7", label: "Floor, walls & doors", helper: "No stains, wall marks or damage", status: "OK", issueCost: 0, note: "" },
 ];
 
 export const INITIAL_STAFF_ATTENDANCE: StaffAttendanceRecord[] = [
-  { id: "st-1", name: "Irfanbhai Bloch", roleTitle: "Hall Caretaker", checkInTime: "08:55 AM", checkOutTime: "—", geoVerified: true, status: "Present" },
-  { id: "st-2", name: "Rameshbhai Solanki", roleTitle: "Cleaner & Helper", checkInTime: "09:12 AM", checkOutTime: "—", geoVerified: true, status: "Late" },
-  { id: "st-3", name: "Salimbhai Qureshi", roleTitle: "Night Security", checkInTime: "—", checkOutTime: "—", geoVerified: false, status: "Absent" },
-  { id: "st-4", name: "NaziyaBen Saiyed", roleTitle: "Office Assistant", checkInTime: "09:00 AM", checkOutTime: "—", geoVerified: true, status: "Present" },
+  { id: "st-1", name: "Irfanbhai Bloch", roleTitle: "Hall Caretaker", checkInTime: "08:55 AM", checkOutTime: "—", geoVerified: true, status: "Present", presentDays: 16, lateDays: 1, absentDays: 0 },
+  { id: "st-2", name: "Yakub Mansuri", roleTitle: "Inspector / Supervisor", checkInTime: "08:30 AM", checkOutTime: "—", geoVerified: true, status: "Present", presentDays: 17, lateDays: 0, absentDays: 0 },
+  { id: "st-3", name: "Rafiq Shaikh", roleTitle: "Electrician", checkInTime: "09:05 AM", checkOutTime: "—", geoVerified: true, status: "Present", presentDays: 15, lateDays: 1, absentDays: 1 },
+  { id: "st-4", name: "Rameshbhai Solanki", roleTitle: "Housekeeping", checkInTime: "09:12 AM", checkOutTime: "—", geoVerified: true, status: "Late", presentDays: 14, lateDays: 2, absentDays: 1 },
+  { id: "st-5", name: "Salimbhai Qureshi", roleTitle: "Security (night)", checkInTime: "—", checkOutTime: "—", geoVerified: false, status: "Absent", presentDays: 14, lateDays: 1, absentDays: 2 },
+  { id: "st-6", name: "NaziyaBen Saiyed", roleTitle: "Accountant", checkInTime: "09:00 AM", checkOutTime: "—", geoVerified: true, status: "Present", presentDays: 16, lateDays: 1, absentDays: 0 },
 ];
 
 export const INITIAL_APPROVALS: ApprovalItem[] = [
