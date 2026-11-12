@@ -170,7 +170,16 @@ interface DashboardContextType {
   markAllNotificationsRead: () => void;
   toggleNotificationRead: (notificationId: string) => void;
   toggleUserActive: (userId: string) => void;
-  addUser: (input: { name: string; userId: string; role: SystemUser["role"] }) => SystemUser;
+  addUser: (input: {
+    name: string;
+    userId: string;
+    role: SystemUser["role"];
+    password: string;
+  }) => SystemUser;
+  updateUser: (
+    targetUserId: string,
+    updates: Partial<Pick<SystemUser, "name" | "userId" | "role" | "password" | "active">>
+  ) => void;
   removeUser: (targetUserId: string) => void;
   updateSystemSettings: (updates: Partial<SystemSettingsState>) => void;
   resetSystemSettings: () => void;
@@ -495,11 +504,11 @@ export function DashboardProvider({
         prev.map((b) =>
           b.id === bookingId || b.receiptNo === bookingId
             ? {
-                ...b,
-                status: "Cancelled",
-                cancellationReason: reason?.trim() || "Cancelled by staff",
-                depositStatus: b.paid > 0 ? "Refunded" : b.depositStatus,
-              }
+              ...b,
+              status: "Cancelled",
+              cancellationReason: reason?.trim() || "Cancelled by staff",
+              depositStatus: b.paid > 0 ? "Refunded" : b.depositStatus,
+            }
             : b
         )
       );
@@ -619,11 +628,11 @@ export function DashboardProvider({
         prev.map((r) =>
           r.id === refundId
             ? {
-                ...r,
-                deductionAmount,
-                deductionNote: note || r.deductionNote,
-                status: role === "admin" ? "Refunded" : "Sent for Approval",
-              }
+              ...r,
+              deductionAmount,
+              deductionNote: note || r.deductionNote,
+              status: role === "admin" ? "Refunded" : "Sent for Approval",
+            }
             : r
         )
       );
@@ -726,11 +735,11 @@ export function DashboardProvider({
         prev.map((item) =>
           item.id === itemId
             ? {
-                ...item,
-                status,
-                issueCost: status === "OK" ? 0 : issueCost,
-                note: status === "OK" ? "" : note,
-              }
+              ...item,
+              status,
+              issueCost: status === "OK" ? 0 : issueCost,
+              note: status === "OK" ? "" : note,
+            }
             : item
         )
       );
@@ -758,12 +767,12 @@ export function DashboardProvider({
         prev.map((b) =>
           b.receiptNo === bookingReceiptNo || b.id === bookingReceiptNo
             ? {
-                ...b,
-                preInspectionDone: mode === "Before Event" ? true : b.preInspectionDone,
-                postInspectionDone: mode === "After Event" ? true : b.postInspectionDone,
-                depositStatus:
-                  mode === "After Event" ? "Ready to Refund" : b.depositStatus,
-              }
+              ...b,
+              preInspectionDone: mode === "Before Event" ? true : b.preInspectionDone,
+              postInspectionDone: mode === "After Event" ? true : b.postInspectionDone,
+              depositStatus:
+                mode === "After Event" ? "Ready to Refund" : b.depositStatus,
+            }
             : b
         )
       );
@@ -775,15 +784,14 @@ export function DashboardProvider({
             return prev.map((r) =>
               r.bookingReceiptNo === bookingReceiptNo
                 ? {
-                    ...r,
-                    deductionAmount: totalDeduction,
-                    deductionNote,
-                    deductionItems,
-                    inspectionRef: `INS-2026-${bookingReceiptNo}-B · ${issues.length} ${
-                      issues.length === 1 ? "issue" : "issues"
+                  ...r,
+                  deductionAmount: totalDeduction,
+                  deductionNote,
+                  deductionItems,
+                  inspectionRef: `INS-2026-${bookingReceiptNo}-B · ${issues.length} ${issues.length === 1 ? "issue" : "issues"
                     }`,
-                    status: r.status === "Refunded" ? "Refunded" : "Ready to Refund",
-                  }
+                  status: r.status === "Refunded" ? "Refunded" : "Ready to Refund",
+                }
                 : r
             );
           }
@@ -804,12 +812,10 @@ export function DashboardProvider({
               deductionNote,
               refundMode: targetBooking.paymentMode || "UPI",
               status: "Ready to Refund",
-              collectedLabel: `₹${targetBooking.deposit.toLocaleString("en-IN")} · ${
-                targetBooking.paymentMode || "UPI"
-              }`,
-              inspectionRef: `INS-2026-${targetBooking.receiptNo}-B · ${issues.length} ${
-                issues.length === 1 ? "issue" : "issues"
-              }`,
+              collectedLabel: `₹${targetBooking.deposit.toLocaleString("en-IN")} · ${targetBooking.paymentMode || "UPI"
+                }`,
+              inspectionRef: `INS-2026-${targetBooking.receiptNo}-B · ${issues.length} ${issues.length === 1 ? "issue" : "issues"
+                }`,
               deductionItems,
             },
             ...prev,
@@ -906,18 +912,50 @@ export function DashboardProvider({
   );
 
   const addUser = useCallback(
-    (input: { name: string; userId: string; role: SystemUser["role"] }): SystemUser => {
-      const created: SystemUser = {
-        id: `u-${Date.now()}`,
-        userId: input.userId.trim(),
-        name: input.name.trim(),
-        role: input.role,
-        lastLogin: "Not signed in yet",
-        active: true,
-      };
-      usersStore.set((prev) => [created, ...prev]);
-      appendLog("User", `Added ${created.role} account`, `${created.name} (${created.userId})`);
-      return created;
+      (input: {
+        name: string;
+        userId: string;
+        role: SystemUser["role"];
+        password: string;
+      }): SystemUser => {
+        const created: SystemUser = {
+          id: `u-${Date.now()}`,
+          userId: input.userId.trim(),
+          name: input.name.trim(),
+          role: input.role,
+          password: input.password,
+          lastLogin: "Not signed in yet",
+          active: true,
+        };
+        usersStore.set((prev) => [created, ...prev]);
+        appendLog("User", `Added ${created.role} account`, `${created.name} (${created.userId})`);
+        return created;
+      },
+        [appendLog]
+  );
+
+  const updateUser = useCallback(
+    (
+      targetUserId: string,
+      updates: Partial<Pick<SystemUser, "name" | "userId" | "role" | "password" | "active">>
+    ) => {
+      usersStore.set((prev) =>
+        prev.map((u) => {
+          if (u.id !== targetUserId) return u;
+          return {
+            ...u,
+            ...updates,
+            name: updates.name !== undefined ? updates.name.trim() : u.name,
+            userId: updates.userId !== undefined ? updates.userId.trim() : u.userId,
+          };
+        })
+      );
+      const changedLabel = updates.password ? "Updated user & password" : "Updated user details";
+      appendLog(
+        "User",
+        changedLabel,
+        `${updates.name || targetUserId}${updates.role ? ` · ${updates.role}` : ""}`
+      );
     },
     [appendLog]
   );
@@ -1006,6 +1044,7 @@ export function DashboardProvider({
         toggleNotificationRead,
         toggleUserActive,
         addUser,
+        updateUser,
         removeUser,
         updateSystemSettings,
         resetSystemSettings,

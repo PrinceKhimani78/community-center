@@ -150,13 +150,13 @@ export interface MaintenanceTicket {
   ticketNo: string;
   title: string;
   category:
-    | "Plumbing"
-    | "Electrical"
-    | "AC / Fans"
-    | "Carpentry"
-    | "Civil"
-    | "Furniture"
-    | "Cleaning";
+  | "Plumbing"
+  | "Electrical"
+  | "AC / Fans"
+  | "Carpentry"
+  | "Civil"
+  | "Furniture"
+  | "Cleaning";
   subCategory?: string;
   location: string;
   priority: "Low" | "Medium" | "High" | "Normal" | "Urgent";
@@ -244,6 +244,7 @@ export interface SystemUser {
   userId: string;
   name: string;
   role: "Admin" | "Manager" | "Accountant" | "Staff";
+  password?: string;
   lastLogin: string;
   active: boolean;
 }
@@ -1036,15 +1037,15 @@ export const INITIAL_ATTENDANCE_LOGS: StaffAttendanceLogEntry[] = OCT_WORKING_DA
       const status: StaffAttendanceLogEntry["status"] = isAbsent
         ? "Absent"
         : isLate
-        ? "Late"
-        : "Present";
+          ? "Late"
+          : "Present";
       const checkInTime = isAbsent
         ? "—"
         : isLate
-        ? `09:${14 + (dateIdx % 5)} AM`
-        : staff.checkInTime !== "—"
-        ? staff.checkInTime
-        : "08:55 AM";
+          ? `09:${14 + (dateIdx % 5)} AM`
+          : staff.checkInTime !== "—"
+            ? staff.checkInTime
+            : "08:55 AM";
       const checkOutTime = isAbsent ? "—" : staff.id === "st-5" ? "06:30 AM" : "06:15 PM";
       return {
         id: `${dateISO}-${staff.id}`,
@@ -1177,8 +1178,8 @@ export const INITIAL_AUDIT_LOGS: AuditLogEntry[] = [
 ];
 
 export const INITIAL_SYSTEM_USERS: SystemUser[] = [
-  { id: "u-1", userId: "admin", name: "Haji Valibhoy Trustee", role: "Admin", lastLogin: "Today, 9:40 AM", active: true },
-  { id: "u-2", userId: "manager", name: "Centre Manager", role: "Manager", lastLogin: "Today, 9:05 AM", active: true },
-  { id: "u-3", userId: "accounts", name: "Imtiyaz Accountant", role: "Accountant", lastLogin: "Yesterday, 6:15 PM", active: true },
-  { id: "u-4", userId: "caretaker", name: "Irfanbhai Bloch", role: "Staff", lastLogin: "Today, 8:55 AM", active: true },
+  { id: "u-1", userId: "admin", name: "Haji Valibhoy Trustee", role: "Admin", password: "admin123", lastLogin: "Today, 9:40 AM", active: true },
+  { id: "u-2", userId: "manager", name: "Centre Manager", role: "Manager", password: "manager123", lastLogin: "Today, 9:05 AM", active: true },
+  { id: "u-3", userId: "accounts", name: "Imtiyaz Accountant", role: "Accountant", password: "accounts123", lastLogin: "Yesterday, 6:15 PM", active: true },
+  { id: "u-4", userId: "caretaker", name: "Irfanbhai Bloch", role: "Staff", password: "staff123", lastLogin: "Today, 8:55 AM", active: true },
 ];
