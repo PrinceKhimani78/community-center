@@ -8,6 +8,7 @@ import {
   ArrowRight,
   Calendar,
   CheckCircle2,
+  Clock,
   Lock,
   Sparkles,
 } from "lucide-react";
@@ -35,10 +36,49 @@ interface NewBookingFormProps {
   onSaved?: (receiptNo: string) => void;
 }
 
+const TIME_OPTIONS: string[] = (() => {
+  const slots: string[] = [];
+  const pushSlot = (slotIdx: number) => {
+    const totalMins = slotIdx * 30;
+    const h24 = Math.floor(totalMins / 60) % 24;
+    const mins = totalMins % 60;
+    const suffix = h24 >= 12 ? "PM" : "AM";
+    const h12 = h24 % 12 === 0 ? 12 : h24 % 12;
+    slots.push(`${String(h12).padStart(2, "0")}:${String(mins).padStart(2, "0")} ${suffix}`);
+  };
+  for (let i = 12; i < 48; i++) pushSlot(i);
+  for (let i = 0; i < 12; i++) pushSlot(i);
+  return slots;
+})();
+
+const TIME_PRESETS = [
+  { label: "Full Day (10 AM – 10 PM)", start: "10:00 AM", end: "10:00 PM" },
+  { label: "Morning (8 AM – 2 PM)", start: "08:00 AM", end: "02:00 PM" },
+  { label: "Evening (5 PM – 11 PM)", start: "05:00 PM", end: "11:00 PM" },
+] as const;
+
+function normalizeTimeLabel(raw: string): string {
+  const match = raw.trim().match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i);
+  if (!match) return raw.trim();
+  const hh = String(Number(match[1])).padStart(2, "0");
+  return `${hh}:${match[2]} ${match[3].toUpperCase()}`;
+}
+
+function parseTimeToMinutes(label: string): number | null {
+  const match = label.trim().match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i);
+  if (!match) return null;
+  let hh = Number(match[1]) % 12;
+  if (match[3].toUpperCase() === "PM") hh += 12;
+  return hh * 60 + Number(match[2]);
+}
+
 function splitTiming(timing: string): { startTime: string; endTime: string } {
   const parts = timing.split(/–|-/).map((p) => p.trim());
   if (parts.length >= 2 && parts[0] && parts[1]) {
-    return { startTime: parts[0], endTime: parts[1] };
+    return {
+      startTime: normalizeTimeLabel(parts[0]),
+      endTime: normalizeTimeLabel(parts[1]),
+    };
   }
   return { startTime: "10:00 AM", endTime: "10:00 PM" };
 }
@@ -598,29 +638,90 @@ export default function NewBookingForm({
               <label className="block text-[12.5px] font-semibold text-[#14213D] mb-1.5">
                 Start Time
               </label>
-              <input
-                type="text"
-                value={startTime}
-                onChange={(e) => setStartTime(e.target.value)}
-                placeholder="10:00 AM"
-                style={{ minHeight: "44px" }}
-                className="w-full rounded-xl border border-[#E5D9BF] bg-[#FAF7F2] px-3.5 text-[13.5px] text-[#0B2A5B] focus:outline-none focus:ring-2 focus:ring-[#E2B544]"
-              />
+              <div className="relative flex items-center">
+                <Clock className="w-4 h-4 text-[#C9971C] absolute left-3.5 pointer-events-none" />
+                <select
+                  value={startTime}
+                  onChange={(e) => setStartTime(e.target.value)}
+                  aria-label="Start Time"
+                  style={{ minHeight: "44px" }}
+                  className="notranslate w-full rounded-xl border border-[#E5D9BF] bg-[#FAF7F2] pl-10 pr-3.5 text-[13.5px] font-semibold text-[#0B2A5B] focus:outline-none focus:ring-2 focus:ring-[#E2B544] cursor-pointer"
+                >
+                  {!TIME_OPTIONS.includes(startTime) && (
+                    <option value={startTime}>{startTime}</option>
+                  )}
+                  {TIME_OPTIONS.map((slot) => (
+                    <option key={slot} value={slot}>
+                      {slot}
+                    </option>
+                  ))}
+                </select>
+              </div>
             </div>
 
             <div>
               <label className="block text-[12.5px] font-semibold text-[#14213D] mb-1.5">
                 End Time
               </label>
-              <input
-                type="text"
-                value={endTime}
-                onChange={(e) => setEndTime(e.target.value)}
-                placeholder="10:00 PM"
-                style={{ minHeight: "44px" }}
-                className="w-full rounded-xl border border-[#E5D9BF] bg-[#FAF7F2] px-3.5 text-[13.5px] text-[#0B2A5B] focus:outline-none focus:ring-2 focus:ring-[#E2B544]"
-              />
+              <div className="relative flex items-center">
+                <Clock className="w-4 h-4 text-[#C9971C] absolute left-3.5 pointer-events-none" />
+                <select
+                  value={endTime}
+                  onChange={(e) => setEndTime(e.target.value)}
+                  aria-label="End Time"
+                  style={{ minHeight: "44px" }}
+                  className="notranslate w-full rounded-xl border border-[#E5D9BF] bg-[#FAF7F2] pl-10 pr-3.5 text-[13.5px] font-semibold text-[#0B2A5B] focus:outline-none focus:ring-2 focus:ring-[#E2B544] cursor-pointer"
+                >
+                  {!TIME_OPTIONS.includes(endTime) && <option value={endTime}>{endTime}</option>}
+                  {TIME_OPTIONS.map((slot) => (
+                    <option key={slot} value={slot}>
+                      {slot}
+                    </option>
+                  ))}
+                </select>
+              </div>
             </div>
+          </div>
+
+          <div className="flex flex-wrap items-center justify-between gap-2 pt-0.5">
+            <div className="flex flex-wrap items-center gap-1.5">
+              <span className="text-[11.5px] font-semibold text-[#5B6474] mr-0.5">
+                Quick slots:
+              </span>
+              {TIME_PRESETS.map((preset) => {
+                const isSelected = startTime === preset.start && endTime === preset.end;
+                return (
+                  <button
+                    key={preset.label}
+                    type="button"
+                    onClick={() => {
+                      setStartTime(preset.start);
+                      setEndTime(preset.end);
+                    }}
+                    className={`px-2.5 py-1 rounded-full text-[11.5px] font-semibold border cursor-pointer transition-all ${
+                      isSelected
+                        ? "bg-[#0B2A5B] text-white border-[#0B2A5B]"
+                        : "bg-[#FAF7F2] text-[#0B2A5B] border-[#E5D9BF] hover:border-[#E2B544]"
+                    }`}
+                  >
+                    {preset.label}
+                  </button>
+                );
+              })}
+            </div>
+
+            {(() => {
+              const sMin = parseTimeToMinutes(startTime);
+              const eMin = parseTimeToMinutes(endTime);
+              if (sMin !== null && eMin !== null && eMin <= sMin && !isMultiDay) {
+                return (
+                  <span className="text-[11.5px] font-semibold text-[#92400E]">
+                    End time is after midnight (or select End Date via Multi-day).
+                  </span>
+                );
+              }
+              return null;
+            })()}
           </div>
 
           {/* Mobile inline availability status banner (matches 5.7) */}
