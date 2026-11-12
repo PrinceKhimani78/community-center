@@ -7,8 +7,8 @@ export default function UsersPage() {
   return (
     <AdminHub
       initialTab="users"
-      title="Users & Roles"
-      subtitle="Manage staff accounts and active status."
+      title="Users"
+      subtitle="View Admin & Manager accounts, add new users, or remove access."
     />
   );
 }

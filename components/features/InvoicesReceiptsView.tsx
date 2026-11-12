@@ -222,7 +222,9 @@ export default function InvoicesReceiptsView({
                   <div className="text-[#5B6474] text-[13px]">
                     {customer?.address || "Dhari, Gujarat"}
                   </div>
-                  <div className="notranslate text-[#5B6474] text-[13px]">{booking.phone}</div>
+                  {booking.phone && (
+                    <div className="notranslate text-[#5B6474] text-[13px]">{booking.phone}</div>
+                  )}
                 </div>
 
                 <div>

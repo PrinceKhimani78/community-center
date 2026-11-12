@@ -94,10 +94,10 @@ export default function ComingUp() {
 
                 <div className="min-w-0">
                   <h3 style={{ color: "#0B2A5B", fontSize: "15px", fontWeight: 700 }} className="truncate">
-                    {booking.eventTitle}
+                    {booking.applicantName}
                   </h3>
                   <p style={{ color: "#5B6474", fontSize: "13px" }} className="truncate mt-0.5">
-                    {booking.applicantName} · {booking.hall}
+                    {booking.eventTitle} · {booking.hall}
                   </p>
                 </div>
               </div>

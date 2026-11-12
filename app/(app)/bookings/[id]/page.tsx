@@ -250,9 +250,10 @@ function BookingDetailsContent() {
           >
             <div className="flex items-start justify-between gap-2">
               <div>
-                <div className="text-[18px] font-bold">{booking.eventTitle}</div>
+                <div className="text-[18px] font-bold">{booking.applicantName}</div>
                 <div className="text-[13px] text-[#F4CF6A] font-medium mt-0.5">
-                  {booking.applicantName} · {booking.phone}
+                  {booking.eventTitle}
+                  {booking.phone ? ` · ${booking.phone}` : ""}
                 </div>
               </div>
               <StatusBadge status={booking.status} />
@@ -331,11 +332,11 @@ function BookingDetailsContent() {
 
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2.5">
-                <h2 className="text-[19px] font-bold text-[#0B2A5B]">{booking.eventTitle}</h2>
+                <h2 className="text-[19px] font-bold text-[#0B2A5B]">{booking.applicantName}</h2>
                 <StatusBadge status={booking.status} />
               </div>
               <p className="text-[13px] text-[#5B6474] mt-0.5">
-                {booking.applicantName} · {booking.hall} {booking.isAC ? "(A.C.)" : ""} ·{" "}
+                {booking.eventTitle} · {booking.hall} {booking.isAC ? "(A.C.)" : ""} ·{" "}
                 {booking.timing} · {booking.guests} guests
               </p>
             </div>

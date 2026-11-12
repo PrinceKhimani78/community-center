@@ -33,7 +33,8 @@ function MaintenanceContent() {
   const searchParams = useSearchParams();
   const tabParam = searchParams.get("tab");
 
-  const { tickets, updateTicketStatus } = useDashboard();
+  const { role, tickets, updateTicketStatus } = useDashboard();
+  const isAdmin = role === "admin";
 
   const [query, setQuery] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("All");
@@ -183,10 +184,12 @@ function MaintenanceContent() {
                 </div>
                 <StatusBadge status={t.status} />
               </div>
-              <div className="text-[12.5px] text-[#5B6474]">
-                {t.category}
-                {t.subCategory ? ` › ${t.subCategory}` : ""} · {t.location}
-              </div>
+              {isAdmin && (
+                <div className="text-[12.5px] text-[#5B6474]">
+                  {t.category}
+                  {t.subCategory ? ` › ${t.subCategory}` : ""} · {t.location}
+                </div>
+              )}
               <div className="flex items-center justify-between pt-1.5 border-t border-[#F1ECE1] text-[12.5px]">
                 <span className="notranslate font-bold text-[#0B2A5B]">
                   ₹{t.estimatedCost.toLocaleString("en-IN")}
@@ -211,8 +214,8 @@ function MaintenanceContent() {
               <thead>
                 <tr className="border-b border-[#F1ECE1] bg-[#FAF7F2]/70 text-[12px] font-semibold text-[#5B6474]">
                   <th className="py-3.5 px-5">Request</th>
-                  <th className="py-3.5 px-3">Category</th>
-                  <th className="py-3.5 px-3">Location</th>
+                  {isAdmin && <th className="py-3.5 px-3">Category</th>}
+                  {isAdmin && <th className="py-3.5 px-3">Location</th>}
                   <th className="py-3.5 px-3">Priority</th>
                   <th className="py-3.5 px-3 text-right">Est. Cost</th>
                   <th className="py-3.5 px-3">Files</th>
@@ -223,7 +226,7 @@ function MaintenanceContent() {
               <tbody className="divide-y divide-[#F1ECE1] text-[13.5px]">
                 {rows.length === 0 ? (
                   <tr>
-                    <td colSpan={8} className="py-12 text-center text-[#5B6474]">
+                    <td colSpan={isAdmin ? 8 : 6} className="py-12 text-center text-[#5B6474]">
                       No maintenance requests match your filter.
                     </td>
                   </tr>
@@ -236,11 +239,13 @@ function MaintenanceContent() {
                           {t.ticketNo}
                         </div>
                       </td>
-                      <td className="py-3.5 px-3 text-[#14213D]">
-                        {t.category}
-                        {t.subCategory ? ` › ${t.subCategory}` : ""}
-                      </td>
-                      <td className="py-3.5 px-3 text-[#5B6474]">{t.location}</td>
+                      {isAdmin && (
+                        <td className="py-3.5 px-3 text-[#14213D]">
+                          {t.category}
+                          {t.subCategory ? ` › ${t.subCategory}` : ""}
+                        </td>
+                      )}
+                      {isAdmin && <td className="py-3.5 px-3 text-[#5B6474]">{t.location}</td>}
                       <td className="py-3.5 px-3">
                         <StatusBadge status={t.priority} />
                       </td>

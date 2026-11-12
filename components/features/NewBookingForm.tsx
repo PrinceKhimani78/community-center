@@ -8,18 +8,21 @@ import {
   ArrowRight,
   Calendar,
   CheckCircle2,
-  Search,
+  Lock,
   Sparkles,
-  UserPlus,
 } from "lucide-react";
 import { useDashboard } from "@/lib/context/DashboardContext";
 import type { BookingRecord, BookingStatus, HallName, PaymentMode } from "@/lib/mock/dashboard";
 import {
+  AC_SURCHARGE_PER_FLOOR,
+  BASE_RENT_PER_FLOOR,
+  DEFAULT_SECURITY_DEPOSIT,
   EVENT_TYPES,
   HALL_OPTIONS,
   countBookingDays,
   dateRangesOverlap,
   formatShortDate,
+  getFloorCount,
   hallsConflict,
   isDateInRange,
 } from "@/lib/utils/bookings";
@@ -59,14 +62,13 @@ export default function NewBookingForm({
   const isEdit = Boolean(editBooking);
   const initialTimes = splitTiming(editBooking?.timing || "10:00 AM – 10:00 PM");
 
-  const [customerMode, setCustomerMode] = useState<"existing" | "new">("existing");
-  const [customerQuery, setCustomerQuery] = useState("");
-  const [selectedApplicantId, setSelectedApplicantId] = useState(
-    editBooking?.applicantId || initialCustomerId || applicants[0]?.id || ""
+  const initialCustomer = initialCustomerId
+    ? applicants.find((a) => a.id === initialCustomerId)
+    : undefined;
+
+  const [customerName, setCustomerName] = useState(
+    editBooking?.applicantName || initialCustomer?.name || ""
   );
-  const [newName, setNewName] = useState("");
-  const [newPhone, setNewPhone] = useState("");
-  const [newAddress, setNewAddress] = useState("");
 
   const isPresetEventType = (val?: string) =>
     Boolean(val && EVENT_TYPES.includes(val as (typeof EVENT_TYPES)[number]) && val !== "Others");
@@ -102,9 +104,27 @@ export default function NewBookingForm({
   const [startTime, setStartTime] = useState(initialTimes.startTime);
   const [endTime, setEndTime] = useState(initialTimes.endTime);
 
+  const initialEditDays = editBooking
+    ? countBookingDays(editBooking.dateISO, editBooking.endDateISO)
+    : 1;
+  const initialEditFloors = editBooking ? getFloorCount(editBooking.hall) : 2;
+  const initialEditStdAc =
+    editBooking?.isAC ? initialEditFloors * AC_SURCHARGE_PER_FLOOR * initialEditDays : 0;
+  const initialManualAc =
+    editBooking?.isFreeUse && editBooking.isAC
+      ? editBooking.rent >= initialEditStdAc
+        ? initialEditStdAc
+        : editBooking.rent
+      : 0;
+  const initialManualHall =
+    editBooking?.isFreeUse ? Math.max(0, editBooking.rent - initialManualAc) : 0;
+
   const [isFreeUse, setIsFreeUse] = useState(Boolean(editBooking?.isFreeUse));
-  const [rent, setRent] = useState(editBooking?.rent ?? 22000);
-  const [deposit, setDeposit] = useState(editBooking?.deposit ?? 5000);
+  const [manualHallRent, setManualHallRent] = useState(initialManualHall);
+  const [manualAcCharge, setManualAcCharge] = useState(initialManualAc);
+  const [manualDeposit, setManualDeposit] = useState(
+    editBooking?.isFreeUse ? editBooking.deposit : 0
+  );
   const [paid, setPaid] = useState(editBooking?.paid ?? 5000);
   const [paymentMode, setPaymentMode] = useState<PaymentMode>(editBooking?.paymentMode || "UPI");
   const [status, setStatus] = useState<BookingStatus>(editBooking?.status || "Pending");
@@ -112,14 +132,7 @@ export default function NewBookingForm({
 
   const [savedReceipt, setSavedReceipt] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
-
-  const filteredApplicants = useMemo(() => {
-    const q = customerQuery.trim().toLowerCase();
-    if (!q) return applicants;
-    return applicants.filter(
-      (a) => a.name.toLowerCase().includes(q) || a.phone.toLowerCase().includes(q)
-    );
-  }, [applicants, customerQuery]);
+  const [showAdvanceErrorDialog, setShowAdvanceErrorDialog] = useState(false);
 
   const effectiveEndISO = isMultiDay && endDateISO >= dateISO ? endDateISO : undefined;
   const totalDays = countBookingDays(dateISO, effectiveEndISO);
@@ -165,10 +178,18 @@ export default function NewBookingForm({
 
   const selectedHallStatus = hallAvailability.find((h) => h.hall === hall);
 
-  const effectiveRent = isFreeUse ? 0 : Number(rent || 0);
-  const effectiveDeposit = isFreeUse ? 0 : Number(deposit || 0);
-  const effectivePaid = isFreeUse ? 0 : Number(paid || 0);
+  const floorCount = getFloorCount(hall);
+  const fixedHallRent = floorCount * BASE_RENT_PER_FLOOR * Math.max(1, totalDays);
+  const fixedAcCharge = isAC
+    ? floorCount * AC_SURCHARGE_PER_FLOOR * Math.max(1, totalDays)
+    : 0;
+  const effectiveHallRent = isFreeUse ? Number(manualHallRent || 0) : fixedHallRent;
+  const effectiveAcCharge = isFreeUse ? Number(manualAcCharge || 0) : fixedAcCharge;
+  const effectiveRent = effectiveHallRent + effectiveAcCharge;
+  const effectiveDeposit = isFreeUse ? Number(manualDeposit || 0) : DEFAULT_SECURITY_DEPOSIT;
+  const effectivePaid = Number(paid || 0);
   const totalCharge = effectiveRent + effectiveDeposit;
+  const hasExcessAdvance = effectivePaid > totalCharge;
   const balanceDue = Math.max(0, totalCharge - effectivePaid);
 
   const dateRangeLabel = useMemo(() => {
@@ -182,6 +203,10 @@ export default function NewBookingForm({
     setIsFreeUse(checked);
     if (checked) {
       setStatus("Awaiting approval");
+      setManualHallRent(0);
+      setManualAcCharge(0);
+      setManualDeposit(0);
+      setPaid(0);
     } else if (status === "Awaiting approval") {
       setStatus("Pending");
     }
@@ -208,29 +233,50 @@ export default function NewBookingForm({
       return;
     }
 
-    let applicantId = selectedApplicantId;
-    const selectedApplicant = applicants.find((a) => a.id === selectedApplicantId);
-    let applicantName = selectedApplicant?.name || "";
-    let phone = selectedApplicant?.phone || "";
+    const trimmedCustomerName = customerName.trim();
+    if (!trimmedCustomerName) {
+      setFormError("Please enter the customer's name.");
+      return;
+    }
 
-    if (customerMode === "new") {
-      if (!newName.trim() || !newPhone.trim()) {
-        setFormError("Please enter the customer's full name and mobile number.");
-        return;
-      }
+    if (effectivePaid > totalCharge) {
+      setShowAdvanceErrorDialog(true);
+      setFormError(
+        `Advance paid (₹${effectivePaid.toLocaleString("en-IN")}) cannot exceed the total booking amount (₹${totalCharge.toLocaleString("en-IN")}).`
+      );
+      return;
+    }
+
+    const matchedApplicant = applicants.find(
+      (a) => a.name.trim().toLowerCase() === trimmedCustomerName.toLowerCase()
+    );
+
+    let applicantId = "";
+    let applicantName = trimmedCustomerName;
+    let phone = "";
+
+    if (
+      editBooking &&
+      trimmedCustomerName.toLowerCase() === editBooking.applicantName.trim().toLowerCase()
+    ) {
+      applicantId = editBooking.applicantId;
+      applicantName = editBooking.applicantName;
+      phone = editBooking.phone;
+    } else if (matchedApplicant) {
+      applicantId = matchedApplicant.id;
+      applicantName = matchedApplicant.name;
+      phone = matchedApplicant.phone;
+    } else {
       const createdApplicant = addApplicant({
-        name: newName.trim(),
-        phone: newPhone.trim(),
-        address: newAddress.trim() || "Dhari, Gujarat",
+        name: trimmedCustomerName,
+        phone: "",
+        address: "Dhari, Gujarat",
         idProofMasked: "Verified at office",
         notes: "",
       });
       applicantId = createdApplicant.id;
       applicantName = createdApplicant.name;
       phone = createdApplicant.phone;
-    } else if (!applicantId) {
-      setFormError("Please select a customer or add a new one.");
-      return;
     }
 
     const formattedStart = formatShortDate(dateISO);
@@ -239,11 +285,11 @@ export default function NewBookingForm({
         ? `${dateISO.slice(8, 10)}–${formatShortDate(effectiveEndISO)}`
         : formattedStart;
     const combinedTiming = `${startTime.trim() || "10:00 AM"} – ${endTime.trim() || "10:00 PM"}`;
+    const baseTitle =
+      totalDays > 1 ? `${resolvedEventType} (${totalDays} days)` : resolvedEventType;
     const eventTitle = isFreeUse
-      ? `${resolvedEventType} (free use)`
-      : totalDays > 1
-      ? `${resolvedEventType} (${totalDays} days)`
-      : resolvedEventType;
+      ? `${baseTitle} (${effectiveRent === 0 ? "free use" : "trustee"})`
+      : baseTitle;
 
     const payload = {
       eventTitle,
@@ -252,7 +298,7 @@ export default function NewBookingForm({
       applicantName,
       phone,
       hall,
-      isAC,
+      isAC: isFreeUse ? isAC || effectiveAcCharge > 0 : isAC,
       dateISO,
       endDateISO: effectiveEndISO,
       dateLabel,
@@ -393,102 +439,28 @@ export default function NewBookingForm({
           }}
           className="animate-fade-up stagger-1 space-y-4"
         >
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <h2 style={{ color: "#0B2A5B", fontSize: "16.5px", fontWeight: 700 }}>
-              Customer & Event
-            </h2>
-            <button
-              type="button"
-              onClick={() => setCustomerMode(customerMode === "existing" ? "new" : "existing")}
-              className="inline-flex items-center gap-1.5 text-[12.5px] font-bold text-[#0B2A5B] hover:text-[#C9971C] cursor-pointer"
-            >
-              <UserPlus className="w-3.5 h-3.5" />
-              <span>
-                {customerMode === "existing" ? "+ Add new customer" : "Select existing customer"}
-              </span>
-            </button>
+          <h2 style={{ color: "#0B2A5B", fontSize: "16.5px", fontWeight: 700 }}>
+            Customer & Event
+          </h2>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+            <div>
+              <label className="block text-[12.5px] font-semibold text-[#14213D] mb-1.5">
+                Customer Name *
+              </label>
+              <input
+                type="text"
+                required
+                value={customerName}
+                onChange={(e) => setCustomerName(e.target.value)}
+                placeholder="Enter customer full name"
+                style={{ minHeight: "44px" }}
+                className="w-full rounded-xl border border-[#E5D9BF] bg-[#FAF7F2] px-3.5 text-[13.5px] text-[#0B2A5B] font-medium focus:outline-none focus:ring-2 focus:ring-[#E2B544]"
+              />
+            </div>
+
+            {eventTypeField}
           </div>
-
-          {customerMode === "existing" ? (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-              <div>
-                <label className="block text-[12.5px] font-semibold text-[#14213D] mb-1.5">
-                  Customer *
-                </label>
-                <div className="relative mb-2">
-                  <Search className="w-3.5 h-3.5 text-[#5B6474] absolute left-3 top-1/2 -translate-y-1/2" />
-                  <input
-                    type="text"
-                    value={customerQuery}
-                    onChange={(e) => setCustomerQuery(e.target.value)}
-                    placeholder="Filter by name or phone..."
-                    className="w-full h-9 pl-8 pr-3 rounded-lg border border-[#E5D9BF] bg-[#FAF7F2] text-[12.5px] focus:outline-none focus:ring-2 focus:ring-[#E2B544]"
-                  />
-                </div>
-                <select
-                  value={selectedApplicantId}
-                  onChange={(e) => setSelectedApplicantId(e.target.value)}
-                  style={{ minHeight: "44px" }}
-                  className="w-full rounded-xl border border-[#E5D9BF] bg-[#FAF7F2] px-3.5 text-[13.5px] text-[#0B2A5B] font-medium focus:outline-none focus:ring-2 focus:ring-[#E2B544]"
-                >
-                  {filteredApplicants.map((a) => (
-                    <option key={a.id} value={a.id}>
-                      {a.name} · {a.phone}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              {eventTypeField}
-            </div>
-          ) : (
-            <div className="space-y-3.5">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-                <div>
-                  <label className="block text-[12.5px] font-semibold text-[#14213D] mb-1.5">
-                    Full Name *
-                  </label>
-                  <input
-                    type="text"
-                    value={newName}
-                    onChange={(e) => setNewName(e.target.value)}
-                    placeholder="e.g. Mr. Yusuf Patel"
-                    style={{ minHeight: "44px" }}
-                    className="w-full rounded-xl border border-[#E5D9BF] bg-[#FAF7F2] px-3.5 text-[13.5px] focus:outline-none focus:ring-2 focus:ring-[#E2B544]"
-                  />
-                </div>
-                <div>
-                  <label className="block text-[12.5px] font-semibold text-[#14213D] mb-1.5">
-                    Mobile Number *
-                  </label>
-                  <input
-                    type="tel"
-                    value={newPhone}
-                    onChange={(e) => setNewPhone(e.target.value)}
-                    placeholder="+91 98..."
-                    style={{ minHeight: "44px" }}
-                    className="w-full rounded-xl border border-[#E5D9BF] bg-[#FAF7F2] px-3.5 text-[13.5px] focus:outline-none focus:ring-2 focus:ring-[#E2B544]"
-                  />
-                </div>
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-                <div>
-                  <label className="block text-[12.5px] font-semibold text-[#14213D] mb-1.5">
-                    Address (Optional)
-                  </label>
-                  <input
-                    type="text"
-                    value={newAddress}
-                    onChange={(e) => setNewAddress(e.target.value)}
-                    placeholder="Street / Area, Dhari"
-                    style={{ minHeight: "44px" }}
-                    className="w-full rounded-xl border border-[#E5D9BF] bg-[#FAF7F2] px-3.5 text-[13.5px] focus:outline-none focus:ring-2 focus:ring-[#E2B544]"
-                  />
-                </div>
-                {eventTypeField}
-              </div>
-            </div>
-          )}
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
             <div>
@@ -529,10 +501,18 @@ export default function NewBookingForm({
               <input
                 type="checkbox"
                 checked={isAC}
-                onChange={(e) => setIsAC(e.target.checked)}
+                onChange={(e) => {
+                  const checked = e.target.checked;
+                  setIsAC(checked);
+                  if (isFreeUse && !checked) {
+                    setManualAcCharge(0);
+                  }
+                }}
                 className="w-4 h-4 accent-[#0B2A5B] rounded"
               />
-              <span>With A.C.</span>
+              <span>
+                With A.C. (+₹{(floorCount * AC_SURCHARGE_PER_FLOOR).toLocaleString("en-IN")})
+              </span>
             </label>
 
             <label className="inline-flex items-center gap-2 text-[13px] font-semibold text-[#0B2A5B] cursor-pointer">
@@ -542,7 +522,7 @@ export default function NewBookingForm({
                 onChange={(e) => handleToggleFreeUse(e.target.checked)}
                 className="w-4 h-4 accent-[#0B2A5B] rounded"
               />
-              <span>Free Community / Trustee Use (₹0)</span>
+              <span>Free Community / Trustee Use (₹0 · manual pricing)</span>
             </label>
           </div>
         </section>
@@ -678,42 +658,81 @@ export default function NewBookingForm({
             <h2 style={{ color: "#0B2A5B", fontSize: "16.5px", fontWeight: 700 }}>
               Charges & Payment
             </h2>
-            {isFreeUse && (
+            {isFreeUse ? (
               <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-blue-50 border border-blue-200 text-[#1D4ED8] text-[11.5px] font-semibold">
                 <Sparkles className="w-3.5 h-3.5" />
-                <span>Free use · Admin approval required</span>
+                <span>Manual pricing · Admin approval required</span>
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-[#FAF5EB] border border-[#EFE4CC] text-[#5B6474] text-[11.5px] font-semibold">
+                <Lock className="w-3 h-3" />
+                <span>Fixed pricing</span>
               </span>
             )}
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
             <div>
-              <label className="block text-[12.5px] font-semibold text-[#14213D] mb-1.5">
-                Rent Amount (₹)
+              <label className="flex items-center gap-1 text-[12.5px] font-semibold text-[#14213D] mb-1.5">
+                {!isFreeUse && <Lock className="w-3 h-3 text-[#5B6474]" />}
+                <span>Hall Rent (₹)</span>
               </label>
               <input
                 type="number"
                 min={0}
-                disabled={isFreeUse}
-                value={effectiveRent}
-                onChange={(e) => setRent(Number(e.target.value))}
+                disabled={!isFreeUse}
+                placeholder="0"
+                value={isFreeUse ? (manualHallRent === 0 ? "" : manualHallRent) : effectiveHallRent}
+                onChange={(e) => setManualHallRent(Math.max(0, Number(e.target.value || 0)))}
+                onBlur={() => {
+                  if (effectivePaid > totalCharge) setShowAdvanceErrorDialog(true);
+                }}
                 style={{ minHeight: "44px" }}
-                className="w-full rounded-xl border border-[#E5D9BF] bg-[#FAF7F2] px-3.5 text-[14px] font-bold text-[#0B2A5B] disabled:opacity-55 focus:outline-none focus:ring-2 focus:ring-[#E2B544]"
+                className="w-full rounded-xl border border-[#E5D9BF] bg-[#FAF7F2] px-3.5 text-[14px] font-bold text-[#0B2A5B] disabled:bg-[#F3EFE6] disabled:text-[#0B2A5B]/80 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-[#E2B544]"
               />
             </div>
 
             <div>
-              <label className="block text-[12.5px] font-semibold text-[#14213D] mb-1.5">
-                Security Deposit (₹)
+              <label className="flex items-center gap-1 text-[12.5px] font-semibold text-[#14213D] mb-1.5">
+                {!isFreeUse && <Lock className="w-3 h-3 text-[#5B6474]" />}
+                <span>A.C. Charges (₹)</span>
               </label>
               <input
                 type="number"
                 min={0}
-                disabled={isFreeUse}
-                value={effectiveDeposit}
-                onChange={(e) => setDeposit(Number(e.target.value))}
+                disabled={!isFreeUse}
+                placeholder="0"
+                value={isFreeUse ? (manualAcCharge === 0 ? "" : manualAcCharge) : effectiveAcCharge}
+                onChange={(e) => {
+                  const val = Math.max(0, Number(e.target.value || 0));
+                  setManualAcCharge(val);
+                  if (val > 0 && !isAC) setIsAC(true);
+                }}
+                onBlur={() => {
+                  if (effectivePaid > totalCharge) setShowAdvanceErrorDialog(true);
+                }}
                 style={{ minHeight: "44px" }}
-                className="w-full rounded-xl border border-[#E5D9BF] bg-[#FAF7F2] px-3.5 text-[14px] font-bold text-[#0B2A5B] disabled:opacity-55 focus:outline-none focus:ring-2 focus:ring-[#E2B544]"
+                className="w-full rounded-xl border border-[#E5D9BF] bg-[#FAF7F2] px-3.5 text-[14px] font-bold text-[#0B2A5B] disabled:bg-[#F3EFE6] disabled:text-[#0B2A5B]/80 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-[#E2B544]"
+              />
+            </div>
+
+            <div>
+              <label className="flex items-center gap-1 text-[12.5px] font-semibold text-[#14213D] mb-1.5">
+                {!isFreeUse && <Lock className="w-3 h-3 text-[#5B6474]" />}
+                <span>Security Deposit (₹)</span>
+              </label>
+              <input
+                type="number"
+                min={0}
+                disabled={!isFreeUse}
+                placeholder="0"
+                value={isFreeUse ? (manualDeposit === 0 ? "" : manualDeposit) : effectiveDeposit}
+                onChange={(e) => setManualDeposit(Math.max(0, Number(e.target.value || 0)))}
+                onBlur={() => {
+                  if (effectivePaid > totalCharge) setShowAdvanceErrorDialog(true);
+                }}
+                style={{ minHeight: "44px" }}
+                className="w-full rounded-xl border border-[#E5D9BF] bg-[#FAF7F2] px-3.5 text-[14px] font-bold text-[#0B2A5B] disabled:bg-[#F3EFE6] disabled:text-[#0B2A5B]/80 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-[#E2B544]"
               />
             </div>
 
@@ -724,13 +743,53 @@ export default function NewBookingForm({
               <input
                 type="number"
                 min={0}
-                disabled={isFreeUse}
-                value={effectivePaid}
-                onChange={(e) => setPaid(Number(e.target.value))}
+                placeholder="0"
+                value={paid === 0 ? "" : paid}
+                onChange={(e) => setPaid(Math.max(0, Number(e.target.value || 0)))}
+                onBlur={() => {
+                  if (effectivePaid > totalCharge) setShowAdvanceErrorDialog(true);
+                }}
                 style={{ minHeight: "44px" }}
-                className="w-full rounded-xl border border-[#E5D9BF] bg-[#FAF7F2] px-3.5 text-[14px] font-bold text-[#15803D] disabled:opacity-55 focus:outline-none focus:ring-2 focus:ring-[#E2B544]"
+                className={`w-full rounded-xl border bg-[#FAF7F2] px-3.5 text-[14px] font-bold focus:outline-none focus:ring-2 ${
+                  hasExcessAdvance
+                    ? "border-[#C62828] text-[#C62828] focus:ring-[#C62828]"
+                    : "border-[#E5D9BF] text-[#15803D] focus:ring-[#E2B544]"
+                }`}
               />
             </div>
+          </div>
+
+          {hasExcessAdvance && (
+            <div className="flex items-center gap-2 px-3.5 py-2.5 rounded-xl bg-[#FEF2F2] border border-[#FECACA] text-[#C62828] text-[12.5px] font-semibold">
+              <AlertTriangle className="w-4 h-4 shrink-0" />
+              <span>
+                Advance paid (₹{effectivePaid.toLocaleString("en-IN")}) cannot exceed total booking
+                amount (₹{totalCharge.toLocaleString("en-IN")}).
+              </span>
+            </div>
+          )}
+
+          <div className="flex flex-wrap items-center justify-between gap-2 px-3.5 py-2 rounded-xl bg-[#FAF7F2] border border-[#EFE4CC] text-[12px] text-[#5B6474]">
+            {isFreeUse ? (
+              <span>
+                Manual pricing unlocked — enter custom amounts for Hall Rent, A.C. Charges, and
+                Security Deposit above.
+              </span>
+            ) : (
+              <span>
+                {floorCount === 2 ? "Double floor" : "Single floor"} ₹
+                {(floorCount * BASE_RENT_PER_FLOOR).toLocaleString("en-IN")}
+                {isAC
+                  ? ` + A.C. ₹${(floorCount * AC_SURCHARGE_PER_FLOOR).toLocaleString("en-IN")}`
+                  : " (Non-A.C.)"}
+                {totalDays > 1 ? ` × ${totalDays} days` : ""} + Deposit ₹
+                {DEFAULT_SECURITY_DEPOSIT.toLocaleString("en-IN")} ={" "}
+                <strong className="text-[#0B2A5B]">
+                  ₹{totalCharge.toLocaleString("en-IN")}
+                </strong>
+                . Check Free Community / Trustee Use above to edit manually.
+              </span>
+            )}
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
@@ -740,10 +799,9 @@ export default function NewBookingForm({
               </label>
               <select
                 value={paymentMode}
-                disabled={isFreeUse}
                 onChange={(e) => setPaymentMode(e.target.value as PaymentMode)}
                 style={{ minHeight: "44px" }}
-                className="w-full rounded-xl border border-[#E5D9BF] bg-[#FAF7F2] px-3.5 text-[13.5px] text-[#0B2A5B] font-medium disabled:opacity-55 focus:outline-none focus:ring-2 focus:ring-[#E2B544]"
+                className="w-full rounded-xl border border-[#E5D9BF] bg-[#FAF7F2] px-3.5 text-[13.5px] text-[#0B2A5B] font-medium focus:outline-none focus:ring-2 focus:ring-[#E2B544]"
               >
                 <option value="UPI">UPI</option>
                 <option value="Cash">Cash</option>
@@ -860,9 +918,17 @@ export default function NewBookingForm({
 
           <div className="space-y-2.5 text-[13px] border-b border-white/15 pb-3.5">
             <div className="flex justify-between text-white/85">
-              <span>Rent {totalDays > 1 ? `(${totalDays} days)` : ""}</span>
+              <span>Hall rent {totalDays > 1 ? `(${totalDays} days)` : ""}</span>
               <span className="font-semibold text-white">
-                {isFreeUse ? "Free" : `₹${effectiveRent.toLocaleString("en-IN")}`}
+                {effectiveHallRent === 0 && isFreeUse
+                  ? "Free (₹0)"
+                  : `₹${effectiveHallRent.toLocaleString("en-IN")}`}
+              </span>
+            </div>
+            <div className="flex justify-between text-white/85">
+              <span>A.C. charges</span>
+              <span className="font-semibold text-white">
+                ₹{effectiveAcCharge.toLocaleString("en-IN")}
               </span>
             </div>
             <div className="flex justify-between text-white/85">
@@ -915,7 +981,7 @@ export default function NewBookingForm({
               }}
               className="interactive-btn w-full text-[14px] font-bold cursor-pointer"
             >
-              {isEdit ? "Update Booking" : "Save Booking"}
+              {isEdit ? "Update Booking" : "Submit Request"}
             </button>
 
             <Link
@@ -928,6 +994,71 @@ export default function NewBookingForm({
           </div>
         </section>
       </div>
+
+      {showAdvanceErrorDialog && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="advance-error-dialog-title"
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-[1px]"
+        >
+          <div className="bg-white rounded-2xl border border-[#FECACA] max-w-md w-full p-6 shadow-2xl space-y-4 animate-check-pop">
+            <div className="flex items-start gap-3">
+              <div className="w-10 h-10 rounded-full bg-[#FEF2F2] border border-[#FECACA] flex items-center justify-center shrink-0">
+                <AlertTriangle className="w-5 h-5 text-[#C62828]" />
+              </div>
+              <div>
+                <h3
+                  id="advance-error-dialog-title"
+                  className="text-[17px] font-bold text-[#0B2A5B]"
+                >
+                  Invalid Advance Amount
+                </h3>
+                <p className="text-[13.5px] text-[#5B6474] mt-1">
+                  Advance paid cannot be more than the total booking amount. Please reduce the
+                  advance or update the charges.
+                </p>
+              </div>
+            </div>
+
+            <div className="rounded-xl bg-[#FAF7F2] border border-[#EFE4CC] p-3.5 space-y-1.5 text-[13px]">
+              <div className="flex justify-between">
+                <span className="text-[#5B6474]">Total Booking Amount</span>
+                <span className="font-bold text-[#0B2A5B]">
+                  ₹{totalCharge.toLocaleString("en-IN")}
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-[#5B6474]">Advance Paid Entered</span>
+                <span className="font-bold text-[#C62828]">
+                  ₹{effectivePaid.toLocaleString("en-IN")}
+                </span>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap items-center justify-end gap-2.5 pt-1">
+              <button
+                type="button"
+                onClick={() => setShowAdvanceErrorDialog(false)}
+                className="px-4 py-2.5 rounded-xl border border-[#EFE4CC] text-[#0B2A5B] text-[13px] font-bold hover:bg-[#FAF5EB] cursor-pointer"
+              >
+                Edit Manually
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setPaid(totalCharge);
+                  setFormError(null);
+                  setShowAdvanceErrorDialog(false);
+                }}
+                className="interactive-btn px-4 py-2.5 rounded-xl bg-[#0B2A5B] text-white text-[13px] font-bold cursor-pointer"
+              >
+                Set Advance to ₹{totalCharge.toLocaleString("en-IN")}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </form>
   );
 }

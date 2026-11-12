@@ -41,7 +41,8 @@ const ROUTE_TITLES: Array<{ prefix: string; title: string; subtitle: string }> =
 
 export default function Topbar({ title }: TopbarProps) {
   const pathname = usePathname();
-  const { role, actionCount } = useDashboard();
+  const { role, actionCount, unreadAlertCount } = useDashboard();
+  const bellCount = role === "admin" ? unreadAlertCount : actionCount;
 
   const matched = ROUTE_TITLES.find((r) => pathname.startsWith(r.prefix));
   const displayTitle = title || matched?.title || "Dashboard";
@@ -125,7 +126,7 @@ export default function Topbar({ title }: TopbarProps) {
             aria-label="Notifications"
           >
             <Bell className="w-4 h-4" />
-            {actionCount > 0 && (
+            {bellCount > 0 && (
               <span
                 style={{
                   position: "absolute",
@@ -145,7 +146,7 @@ export default function Topbar({ title }: TopbarProps) {
                   boxShadow: "0 2px 4px rgba(220, 38, 38, 0.3)",
                 }}
               >
-                {actionCount}
+                {bellCount}
               </span>
             )}
           </Link>
@@ -232,9 +233,9 @@ export default function Topbar({ title }: TopbarProps) {
                 aria-label="Notifications"
               >
                 <Bell className="w-5 h-5" />
-                {actionCount > 0 && (
+                {bellCount > 0 && (
                   <span className="absolute -top-1.5 -right-1.5 bg-red-600 text-white text-[10px] font-bold min-w-[18px] h-[18px] px-1 rounded-full flex items-center justify-center">
-                    {actionCount}
+                    {bellCount}
                   </span>
                 )}
               </Link>
@@ -288,9 +289,9 @@ export default function Topbar({ title }: TopbarProps) {
                 aria-label="Notifications"
               >
                 <Bell className="w-4 h-4" />
-                {actionCount > 0 && (
+                {bellCount > 0 && (
                   <span className="absolute -top-1 -right-1 bg-red-600 text-white text-[9.5px] font-bold min-w-[16px] h-[16px] px-1 rounded-full flex items-center justify-center">
-                    {actionCount}
+                    {bellCount}
                   </span>
                 )}
               </Link>

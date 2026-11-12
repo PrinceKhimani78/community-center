@@ -15,7 +15,7 @@ const TAG_CONFIG: Record<ActionTag, { bg: string; text: string; label: string }>
 };
 
 export default function ActionList() {
-  const { actionItems, completeAction, lastCompleted, undoAction } = useDashboard();
+  const { role, actionItems, completeAction, lastCompleted, undoAction } = useDashboard();
 
   return (
     <div
@@ -50,14 +50,16 @@ export default function ActionList() {
             {actionItems.length} left
           </span>
         </div>
-        <Link
-          href="/notifications"
-          style={{ color: "#C9971C", fontSize: "13px", fontWeight: 600 }}
-          className="hover:underline flex items-center gap-1 group"
-        >
-          <span>All alerts</span>
-          <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform" />
-        </Link>
+        {role === "admin" && (
+          <Link
+            href="/notifications"
+            style={{ color: "#C9971C", fontSize: "13px", fontWeight: 600 }}
+            className="hover:underline flex items-center gap-1 group"
+          >
+            <span>All alerts</span>
+            <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform" />
+          </Link>
+        )}
       </div>
 
       {/* Undo Banner */}

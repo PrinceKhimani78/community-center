@@ -28,7 +28,20 @@ const STATUS_TABS: Array<{ id: "All" | BookingStatus; label: string }> = [
   { id: "Cancelled", label: "Cancelled" },
 ];
 
-type MobileSegment = "Upcoming" | "Today" | "Past" | "Cancelled";
+type MobileSegment = "Upcoming" | "Pending" | "Today" | "Past" | "Cancelled";
+
+function isPendingOrUnapproved(status: BookingStatus): boolean {
+  return status === "Pending" || status === "Awaiting approval";
+}
+
+function matchesStatusFilter(
+  status: BookingStatus,
+  filter: "All" | BookingStatus
+): boolean {
+  if (filter === "All") return true;
+  if (filter === "Pending") return isPendingOrUnapproved(status);
+  return status === filter;
+}
 
 const PAGE_SIZE = 6;
 
@@ -68,15 +81,16 @@ export default function BookingsPage() {
     const counts: Record<string, number> = { All: baseSearchFiltered.length };
     for (const tab of STATUS_TABS) {
       if (tab.id !== "All") {
-        counts[tab.id] = baseSearchFiltered.filter((b) => b.status === tab.id).length;
+        counts[tab.id] = baseSearchFiltered.filter((b) =>
+          matchesStatusFilter(b.status, tab.id)
+        ).length;
       }
     }
     return counts;
   }, [baseSearchFiltered]);
 
   const desktopFiltered = useMemo(() => {
-    if (statusFilter === "All") return baseSearchFiltered;
-    return baseSearchFiltered.filter((b) => b.status === statusFilter);
+    return baseSearchFiltered.filter((b) => matchesStatusFilter(b.status, statusFilter));
   }, [baseSearchFiltered, statusFilter]);
 
   const totalPages = Math.max(1, Math.ceil(desktopFiltered.length / PAGE_SIZE));
@@ -90,6 +104,9 @@ export default function BookingsPage() {
     return baseSearchFiltered.filter((b) => {
       if (mobileSegment === "Cancelled") return b.status === "Cancelled";
       if (b.status === "Cancelled") return false;
+      if (mobileSegment === "Pending") {
+        return isPendingOrUnapproved(b.status);
+      }
       if (mobileSegment === "Today") {
         return isDateInRange(REFERENCE_TODAY_ISO, b.dateISO, b.endDateISO);
       }
@@ -174,13 +191,13 @@ export default function BookingsPage() {
           )}
 
           {/* Segmented Tabs */}
-          <div className="bg-white rounded-xl border border-[#EFE4CC] p-1 grid grid-cols-4 gap-1">
-            {(["Upcoming", "Today", "Past", "Cancelled"] as const).map((seg) => (
+          <div className="bg-white rounded-xl border border-[#EFE4CC] p-1 flex items-center gap-1 overflow-x-auto">
+            {(["Upcoming", "Pending", "Today", "Past", "Cancelled"] as const).map((seg) => (
               <button
                 key={seg}
                 type="button"
                 onClick={() => setMobileSegment(seg)}
-                className={`py-2 rounded-lg text-[12.5px] font-bold cursor-pointer transition-all ${
+                className={`flex-1 min-w-fit px-2 py-2 rounded-lg text-[12px] font-bold whitespace-nowrap cursor-pointer transition-all ${
                   mobileSegment === seg
                     ? "bg-[#0B2A5B] text-white shadow-xs"
                     : "text-[#14213D] hover:bg-[#FAF5EB]"
@@ -238,10 +255,10 @@ export default function BookingsPage() {
                         </div>
                         <div className="min-w-0">
                           <div className="font-bold text-[#0B2A5B] text-[15px] truncate">
-                            {b.eventTitle}
+                            {b.applicantName}
                           </div>
                           <div className="text-[12.5px] text-[#5B6474] truncate">
-                            {b.applicantName}
+                            {b.eventTitle}
                           </div>
                           <div className="text-[11.5px] text-[#5B6474] truncate mt-0.5">
                             {days > 1 ? `${b.dateLabel} · ${days} days` : b.timing} · {b.hall}
@@ -424,8 +441,8 @@ export default function BookingsPage() {
               <table className="w-full text-left border-collapse min-w-[820px]">
                 <thead>
                   <tr className="border-b border-[#F1ECE1] bg-[#FAF7F2]/70 text-[12px] font-semibold text-[#5B6474]">
-                    <th className="py-3.5 px-5">Booking</th>
-                    <th className="py-3.5 px-4">Customer</th>
+                    <th className="py-3.5 px-5">Customer</th>
+                    <th className="py-3.5 px-4">Occasion</th>
                     <th className="py-3.5 px-4">Date & Time</th>
                     <th className="py-3.5 px-4">Hall</th>
                     <th className="py-3.5 px-4">Rent</th>
@@ -453,16 +470,18 @@ export default function BookingsPage() {
                               href={`/bookings/${b.receiptNo}`}
                               className="font-bold text-[#0B2A5B] hover:text-[#C9971C] block"
                             >
-                              {b.eventTitle}
+                              {b.applicantName}
                             </Link>
-                            <span className="notranslate text-[11.5px] text-[#5B6474]">
-                              {formatBookingCode(b.receiptNo)}
-                            </span>
+                            {b.phone && (
+                              <span className="notranslate text-[12px] text-[#5B6474]">{b.phone}</span>
+                            )}
                           </td>
 
                           <td className="py-3.5 px-4">
-                            <div className="font-semibold text-[#14213D]">{b.applicantName}</div>
-                            <div className="notranslate text-[12px] text-[#5B6474]">{b.phone}</div>
+                            <div className="font-semibold text-[#14213D]">{b.eventTitle}</div>
+                            <span className="notranslate text-[11.5px] text-[#5B6474]">
+                              {formatBookingCode(b.receiptNo)}
+                            </span>
                           </td>
 
                           <td className="py-3.5 px-4">

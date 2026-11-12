@@ -12,9 +12,9 @@ const GUIDE_CONTENT: Record<HelpTab, { title: string; steps: string[] }> = {
     title: "How to Make a New Hall Booking",
     steps: [
       "1. Click Bookings on the left menu, then click the New Booking tab.",
-      "2. Pick an existing person or tap + New Person to enter their name and mobile number.",
+      "2. Enter the Customer Name directly in the form.",
       "3. Pick the Event Type, Hall (Ground Floor or Ground + First Floor), and Date.",
-      "4. Enter Rent, Deposit, and Advance Paid today, then tap Save Booking.",
+      "4. Confirm the fixed Hall, A.C., and ₹15,000 Deposit charges (or check Free Community / Trustee Use to enter them manually), enter Advance Paid, then tap Submit Request.",
     ],
   },
   money: {

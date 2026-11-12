@@ -90,10 +90,10 @@ export default function SummaryCards({ onOpenTodoTab }: SummaryCardsProps) {
               style={{ color: "#0B2A5B", fontSize: "18px", fontWeight: 700 }}
               className="leading-snug truncate"
             >
-              {todayBooking?.eventTitle || "Wedding"}
+              {todayBooking?.applicantName || "Mr. Imran Patel"}
             </h3>
             <p style={{ color: "#64748B", fontSize: "13px" }} className="mt-0.5 truncate font-medium">
-              {todayBooking?.applicantName || "Mr. Imran Patel"}
+              {todayBooking?.eventTitle || "Wedding"}
             </p>
           </div>
 

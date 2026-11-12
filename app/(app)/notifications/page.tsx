@@ -2,54 +2,82 @@
 
 import React, { useState } from "react";
 import Link from "next/link";
-import { CheckSquare, Bell, Wallet, CalendarDays, Wrench, CheckCheck, ArrowRight } from "lucide-react";
+import {
+  CheckSquare,
+  Bell,
+  Wallet,
+  CalendarDays,
+  Wrench,
+  CheckCheck,
+  ArrowRight,
+  MapPin,
+  ShieldCheck,
+} from "lucide-react";
 import { useDashboard } from "@/lib/context/DashboardContext";
 import PageShell from "@/components/common/PageShell";
 import TabBar, { TabItem } from "@/components/common/TabBar";
 import ActionList from "@/components/dashboard/ActionList";
 
-type NotifTab = "todo" | "All" | "Money" | "Bookings" | "Repairs";
+type NotifTab = "todo" | "All" | "Attendance" | "Money" | "Bookings" | "Repairs";
 
 export default function NotificationsPage() {
-  const { notifications, actionCount, markAllNotificationsRead, toggleNotificationRead } =
-    useDashboard();
-  const [activeTab, setActiveTab] = useState<NotifTab>("todo");
-
-  const unreadCount = notifications.filter((n) => n.unread).length;
+  const {
+    role,
+    notifications,
+    actionCount,
+    unreadAlertCount,
+    markAllNotificationsRead,
+    toggleNotificationRead,
+  } = useDashboard();
+  const isAdmin = role === "admin";
+  const [selectedTab, setSelectedTab] = useState<NotifTab | null>(null);
+  const activeTab: NotifTab = isAdmin ? (selectedTab ?? "All") : "todo";
 
   const filtered = notifications.filter(
     (n) => activeTab === "All" || n.category === activeTab
   );
 
-  const tabs: TabItem<NotifTab>[] = [
-    { id: "todo", label: "To-Do List", icon: CheckSquare, count: actionCount },
-    { id: "All", label: "All Alerts", icon: Bell, count: notifications.length },
-    {
-      id: "Money",
-      label: "Money",
-      icon: Wallet,
-      count: notifications.filter((n) => n.category === "Money").length,
-    },
-    {
-      id: "Bookings",
-      label: "Bookings",
-      icon: CalendarDays,
-      count: notifications.filter((n) => n.category === "Bookings").length,
-    },
-    {
-      id: "Repairs",
-      label: "Repairs",
-      icon: Wrench,
-      count: notifications.filter((n) => n.category === "Repairs").length,
-    },
-  ];
+  const tabs: TabItem<NotifTab>[] = isAdmin
+    ? [
+        { id: "All", label: "All Alerts", icon: Bell, count: notifications.length },
+        {
+          id: "Attendance",
+          label: "Geo-fence & Attendance",
+          icon: MapPin,
+          count: notifications.filter((n) => n.category === "Attendance").length,
+        },
+        {
+          id: "Money",
+          label: "Money",
+          icon: Wallet,
+          count: notifications.filter((n) => n.category === "Money").length,
+        },
+        {
+          id: "Bookings",
+          label: "Bookings",
+          icon: CalendarDays,
+          count: notifications.filter((n) => n.category === "Bookings").length,
+        },
+        {
+          id: "Repairs",
+          label: "Repairs",
+          icon: Wrench,
+          count: notifications.filter((n) => n.category === "Repairs").length,
+        },
+        { id: "todo", label: "To-Do List", icon: CheckSquare, count: actionCount },
+      ]
+    : [{ id: "todo", label: "To-Do List", icon: CheckSquare, count: actionCount }];
 
   return (
     <PageShell
-      title="To-Do & Notifications"
-      subtitle={`${actionCount} task(s) pending · ${unreadCount} unread alert(s)`}
+      title={isAdmin ? "Admin Alerts & To-Do" : "To-Do List"}
+      subtitle={
+        isAdmin
+          ? `${unreadAlertCount} unread alert(s) · ${actionCount} task(s) pending`
+          : `${actionCount} task(s) pending · System & geo-fence alerts go directly to Admin`
+      }
       rightSlot={
-        activeTab !== "todo" && unreadCount > 0 ? (
+        isAdmin && activeTab !== "todo" && unreadAlertCount > 0 ? (
           <button
             type="button"
             onClick={markAllNotificationsRead}
@@ -62,16 +90,29 @@ export default function NotificationsPage() {
         ) : undefined
       }
     >
+      {!isAdmin && (
+        <div className="mb-4 px-4 py-3 rounded-2xl bg-[#FAF7F2] border border-[#EFE4CC] text-[13px] text-[#0B2A5B] flex items-center gap-2.5">
+          <ShieldCheck className="w-4 h-4 text-[#C9971C] shrink-0" />
+          <span>
+            All alerts (Geo-fence violations, attendance check-ins, payment alerts, bookings &amp; repairs) are delivered to <strong>Admin</strong>.
+          </span>
+        </div>
+      )}
+
       <TabBar
         tabs={tabs}
         activeTab={activeTab}
-        onChange={setActiveTab}
+        onChange={setSelectedTab}
         ariaLabel="Notification tabs"
       />
 
       <div key={activeTab} className="animate-tab-enter space-y-3">
         {activeTab === "todo" ? (
           <ActionList />
+        ) : filtered.length === 0 ? (
+          <div className="bg-white rounded-2xl border border-[#EFE4CC] p-8 text-center text-[13.5px] text-[#5B6474]">
+            No alerts in this category yet.
+          </div>
         ) : (
           filtered.map((n, idx) => (
             <div

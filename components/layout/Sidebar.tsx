@@ -35,7 +35,6 @@ const MAIN_NAV_ITEMS: NavItem[] = [
   { label: "Notifications", href: "/notifications", icon: Bell, badge: "actionCount" },
   { label: "Bookings", href: "/bookings", icon: CalendarDays },
   { label: "Calendar", href: "/calendar", icon: Calendar },
-  { label: "Customers", href: "/customers", icon: Users },
   { label: "Payments", href: "/payments", icon: CreditCard },
   { label: "Deposit Refunds", href: "/deposits/1045", icon: RotateCcw },
   { label: "Invoices & Receipts", href: "/invoices/1048", icon: Receipt },
@@ -45,6 +44,7 @@ const MAIN_NAV_ITEMS: NavItem[] = [
 ];
 
 const ADMIN_NAV_ITEMS: NavItem[] = [
+  { label: "Users", href: "/users", icon: Users },
   { label: "Settings", href: "/settings", icon: Settings },
   { label: "Help & Guide", href: "/help", icon: HelpCircle },
 ];
@@ -52,7 +52,8 @@ const ADMIN_NAV_ITEMS: NavItem[] = [
 export default function Sidebar() {
   const pathname = usePathname();
   const router = useRouter();
-  const { role, actionCount } = useDashboard();
+  const { role, actionCount, unreadAlertCount } = useDashboard();
+  const notifBadgeCount = role === "admin" ? unreadAlertCount : actionCount;
   const [hoveredHref, setHoveredHref] = useState<string | null>(null);
   const [isLogoutHovered, setIsLogoutHovered] = useState(false);
 
@@ -77,7 +78,6 @@ export default function Sidebar() {
             (item.href !== "/dashboard" &&
               (pathname.startsWith(item.href) ||
                 (basePrefix !== "/" && pathname.startsWith(basePrefix)) ||
-                (basePrefix === "/customers" && pathname.startsWith("/applicants")) ||
                 (basePrefix === "/invoices" && pathname.startsWith("/receipts"))));
           const isHovered = hoveredHref === item.href;
 
@@ -153,7 +153,7 @@ export default function Sidebar() {
                 </div>
 
                 <div className="flex items-center gap-1.5 shrink-0">
-                  {item.badge === "actionCount" && actionCount > 0 && (
+                  {item.badge === "actionCount" && notifBadgeCount > 0 && (
                     <span
                       style={{
                         backgroundColor: "#DC2626",
@@ -162,7 +162,7 @@ export default function Sidebar() {
                       }}
                       className="h-[18px] min-w-[18px] px-1.5 rounded-full text-[10.5px] font-bold flex items-center justify-center"
                     >
-                      {actionCount}
+                      {notifBadgeCount}
                     </span>
                   )}
 

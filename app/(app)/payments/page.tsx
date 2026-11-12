@@ -3,15 +3,22 @@
 import React, { Suspense, useMemo, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { AlertTriangle, ArrowRight, CheckCircle2, Plus, Printer } from "lucide-react";
+import { AlertTriangle, ArrowRight, Calendar, CheckCircle2, Plus, Printer } from "lucide-react";
 import { useDashboard } from "@/lib/context/DashboardContext";
 import type { PaymentMode, PaymentRecord } from "@/lib/mock/dashboard";
 import PageShell from "@/components/common/PageShell";
 import StatusBadge from "@/components/common/StatusBadge";
-import { getBookingBalance } from "@/lib/utils/bookings";
+import {
+  REFERENCE_TODAY_ISO,
+  formatShortDate,
+  getBookingBalance,
+  isDateInRange,
+  parseDisplayDateToISO,
+} from "@/lib/utils/bookings";
 
 type FinanceTab = "payments" | "expenses" | "refunds";
 type PaymentFilter = "All" | "Rent" | "Deposit";
+type KpiFilterMode = "all" | "month" | "date" | "range";
 
 function PaymentsContent() {
   const searchParams = useSearchParams();
@@ -44,6 +51,11 @@ function PaymentsContent() {
 
   const [paymentFilter, setPaymentFilter] = useState<PaymentFilter>("All");
   const [remindersSentMsg, setRemindersSentMsg] = useState<string | null>(null);
+  const [kpiFilterMode, setKpiFilterMode] = useState<KpiFilterMode>("all");
+  const [kpiMonth, setKpiMonth] = useState("2026-10");
+  const [kpiDate, setKpiDate] = useState(REFERENCE_TODAY_ISO);
+  const [kpiFrom, setKpiFrom] = useState("2026-10-01");
+  const [kpiTo, setKpiTo] = useState("2026-10-31");
 
   const bookingsWithBalance = useMemo(
     () => bookings.filter((b) => getBookingBalance(b) > 0),
@@ -83,25 +95,78 @@ function PaymentsContent() {
   const [expPaidTo, setExpPaidTo] = useState("");
   const [expSaved, setExpSaved] = useState(false);
 
+  const kpiPeriodLabel = useMemo(() => {
+    if (kpiFilterMode === "month" && kpiMonth) {
+      const [y, m] = kpiMonth.split("-");
+      const dt = new Date(Number(y), Number(m) - 1, 1);
+      return Number.isNaN(dt.getTime())
+        ? kpiMonth
+        : dt.toLocaleDateString("en-GB", { month: "short", year: "numeric" });
+    }
+    if (kpiFilterMode === "date" && kpiDate) {
+      return formatShortDate(kpiDate);
+    }
+    if (kpiFilterMode === "range") {
+      if (kpiFrom && kpiTo) return `${formatShortDate(kpiFrom)} – ${formatShortDate(kpiTo)}`;
+      if (kpiFrom) return `From ${formatShortDate(kpiFrom)}`;
+      if (kpiTo) return `Until ${formatShortDate(kpiTo)}`;
+    }
+    return "All";
+  }, [kpiFilterMode, kpiMonth, kpiDate, kpiFrom, kpiTo]);
+
   const kpis = useMemo(() => {
-    const collected = payments.reduce((s, p) => s + p.amount, 0);
-    const pending = bookingsWithBalance.reduce((s, b) => s + getBookingBalance(b), 0);
-    const overdueBookings = bookingsWithBalance.filter((b) =>
+    const matchesKpiDate = (isoDate: string, endIsoDate?: string) => {
+      if (kpiFilterMode === "all") return true;
+      if (!isoDate) return false;
+      if (kpiFilterMode === "month") {
+        if (!kpiMonth) return true;
+        return (
+          isoDate.startsWith(kpiMonth) ||
+          (Boolean(endIsoDate) && Boolean(endIsoDate?.startsWith(kpiMonth)))
+        );
+      }
+      if (kpiFilterMode === "date") {
+        if (!kpiDate) return true;
+        return isDateInRange(kpiDate, isoDate, endIsoDate);
+      }
+      const effectiveEnd = endIsoDate && endIsoDate >= isoDate ? endIsoDate : isoDate;
+      const afterStart = !kpiFrom || effectiveEnd >= kpiFrom;
+      const beforeEnd = !kpiTo || isoDate <= kpiTo;
+      return afterStart && beforeEnd;
+    };
+
+    const kpiPayments = payments.filter((p) =>
+      matchesKpiDate(parseDisplayDateToISO(p.dateLabel))
+    );
+    const kpiBookingsWithBalance = bookingsWithBalance.filter((b) =>
+      matchesKpiDate(b.dateISO, b.endDateISO)
+    );
+    const kpiRefunds = refunds.filter((r) =>
+      matchesKpiDate(parseDisplayDateToISO(r.eventDate))
+    );
+    const kpiHoldBookings = bookings.filter(
+      (b) =>
+        b.status !== "Cancelled" &&
+        b.deposit > 0 &&
+        !refunds.some((r) => r.bookingReceiptNo === b.receiptNo) &&
+        matchesKpiDate(b.dateISO, b.endDateISO)
+    );
+    const kpiExpenses = expenses.filter((e) =>
+      matchesKpiDate(parseDisplayDateToISO(e.dateLabel))
+    );
+
+    const collected = kpiPayments.reduce((s, p) => s + p.amount, 0);
+    const pending = kpiBookingsWithBalance.reduce((s, b) => s + getBookingBalance(b), 0);
+    const overdueBookings = kpiBookingsWithBalance.filter((b) =>
       (b.notes || "").toLowerCase().includes("overdue")
     );
     const overdueAmt = overdueBookings.reduce((s, b) => s + getBookingBalance(b), 0);
-    const depositsHeld = refunds
-      .filter((r) => r.status !== "Refunded")
-      .reduce((s, r) => s + r.heldAmount, 0) +
-      bookings
-        .filter(
-          (b) =>
-            b.status !== "Cancelled" &&
-            b.deposit > 0 &&
-            !refunds.some((r) => r.bookingReceiptNo === b.receiptNo)
-        )
-        .reduce((s, b) => s + b.deposit, 0);
-    const totalExpenses = expenses.reduce((s, e) => s + e.amount, 0);
+    const depositsHeld =
+      kpiRefunds
+        .filter((r) => r.status !== "Refunded")
+        .reduce((s, r) => s + r.heldAmount, 0) +
+      kpiHoldBookings.reduce((s, b) => s + b.deposit, 0);
+    const totalExpenses = kpiExpenses.reduce((s, e) => s + e.amount, 0);
     return {
       collected,
       pending,
@@ -110,7 +175,18 @@ function PaymentsContent() {
       depositsHeld,
       totalExpenses,
     };
-  }, [payments, bookingsWithBalance, refunds, bookings, expenses]);
+  }, [
+    payments,
+    bookingsWithBalance,
+    refunds,
+    bookings,
+    expenses,
+    kpiFilterMode,
+    kpiMonth,
+    kpiDate,
+    kpiFrom,
+    kpiTo,
+  ]);
 
   const filteredPayments = useMemo(() => {
     if (paymentFilter === "All") return payments;
@@ -191,10 +267,95 @@ function PaymentsContent() {
           </Link>
         </div>
 
+        {/* Calendar / Date-wise KPI Filter */}
+        <div className="bg-white rounded-2xl border border-[#EFE4CC] p-3 flex flex-wrap items-center justify-between gap-2.5">
+          <div className="flex flex-wrap items-center gap-1.5">
+            <span className="inline-flex items-center gap-1.5 text-[12px] font-bold text-[#0B2A5B] mr-1">
+              <Calendar className="w-3.5 h-3.5 text-[#C9971C]" />
+              <span>KPI Filter:</span>
+            </span>
+            {(
+              [
+                { id: "all", label: "All" },
+                { id: "month", label: "Month" },
+                { id: "date", label: "Date" },
+                { id: "range", label: "Range" },
+              ] as const
+            ).map((opt) => (
+              <button
+                key={opt.id}
+                type="button"
+                onClick={() => setKpiFilterMode(opt.id)}
+                className={`px-3 py-1.5 rounded-lg text-[12px] font-bold cursor-pointer border transition-all ${
+                  kpiFilterMode === opt.id
+                    ? "bg-[#0B2A5B] text-white border-[#0B2A5B]"
+                    : "bg-[#FAF7F2] text-[#14213D] border-[#EFE4CC] hover:border-[#E2B544]"
+                }`}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+
+          {kpiFilterMode !== "all" && (
+            <div className="flex flex-wrap items-center gap-2">
+              {kpiFilterMode === "month" && (
+                <input
+                  type="month"
+                  value={kpiMonth}
+                  onChange={(e) => setKpiMonth(e.target.value)}
+                  aria-label="Filter KPIs by month"
+                  className="h-9 rounded-lg border border-[#E5D9BF] bg-[#FAF7F2] px-2.5 text-[12.5px] font-semibold text-[#0B2A5B] focus:outline-none focus:ring-2 focus:ring-[#E2B544]"
+                />
+              )}
+
+              {kpiFilterMode === "date" && (
+                <input
+                  type="date"
+                  value={kpiDate}
+                  onChange={(e) => setKpiDate(e.target.value)}
+                  aria-label="Filter KPIs by date"
+                  className="h-9 rounded-lg border border-[#E5D9BF] bg-[#FAF7F2] px-2.5 text-[12.5px] font-semibold text-[#0B2A5B] focus:outline-none focus:ring-2 focus:ring-[#E2B544]"
+                />
+              )}
+
+              {kpiFilterMode === "range" && (
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <input
+                    type="date"
+                    value={kpiFrom}
+                    onChange={(e) => setKpiFrom(e.target.value)}
+                    aria-label="KPI from date"
+                    className="h-9 rounded-lg border border-[#E5D9BF] bg-[#FAF7F2] px-2 text-[12.5px] font-semibold text-[#0B2A5B] focus:outline-none focus:ring-2 focus:ring-[#E2B544]"
+                  />
+                  <span className="text-[12px] text-[#5B6474]">–</span>
+                  <input
+                    type="date"
+                    value={kpiTo}
+                    onChange={(e) => setKpiTo(e.target.value)}
+                    aria-label="KPI to date"
+                    className="h-9 rounded-lg border border-[#E5D9BF] bg-[#FAF7F2] px-2 text-[12.5px] font-semibold text-[#0B2A5B] focus:outline-none focus:ring-2 focus:ring-[#E2B544]"
+                  />
+                </div>
+              )}
+
+              <button
+                type="button"
+                onClick={() => setKpiFilterMode("all")}
+                className="text-[12px] font-bold text-[#C62828] hover:underline px-1.5 cursor-pointer"
+              >
+                Reset
+              </button>
+            </div>
+          )}
+        </div>
+
         {/* 5 KPI Cards (matches 4.10) */}
         <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
           <div className="bg-white rounded-2xl border border-[#EFE4CC] p-4">
-            <div className="text-[12px] font-medium text-[#5B6474]">Collected · Oct</div>
+            <div className="text-[12px] font-medium text-[#5B6474]">
+              Collected · {kpiPeriodLabel}
+            </div>
             <div className="notranslate text-[22px] font-extrabold text-[#15803D] mt-1">
               ₹{kpis.collected.toLocaleString("en-IN")}
             </div>
@@ -218,7 +379,9 @@ function PaymentsContent() {
             </div>
           </div>
           <div className="bg-white rounded-2xl border border-[#EFE4CC] p-4 col-span-2 md:col-span-1">
-            <div className="text-[12px] font-medium text-[#5B6474]">Expenses · Oct</div>
+            <div className="text-[12px] font-medium text-[#5B6474]">
+              Expenses · {kpiPeriodLabel}
+            </div>
             <div className="notranslate text-[22px] font-extrabold text-[#8A6510] mt-1">
               ₹{kpis.totalExpenses.toLocaleString("en-IN")}
             </div>

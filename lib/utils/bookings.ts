@@ -1,9 +1,33 @@
 import type { BookingRecord, BookingStatus, HallName } from "@/lib/mock/dashboard";
 
+export const BASE_RENT_PER_FLOOR = 5000;
+export const AC_SURCHARGE_PER_FLOOR = 2000;
+export const DEFAULT_SECURITY_DEPOSIT = 15000;
+
 export const HALL_OPTIONS: HallName[] = [
   "Ground Floor",
   "Ground + First Floor",
 ];
+
+/** Returns number of floors included in the selected hall (1 for single floor, 2 for double floor). */
+export function getFloorCount(hall: HallName): number {
+  return hall === "Ground + First Floor" ? 2 : 1;
+}
+
+/**
+ * Calculates standard hall rent:
+ * ₹5,000 per floor (Single = ₹5,000, Double = ₹10,000) plus ₹2,000 per floor when A.C. is enabled,
+ * multiplied by the number of booking days.
+ */
+export function calculateHallRent(
+  hall: HallName,
+  isAC: boolean,
+  days = 1
+): number {
+  const floors = getFloorCount(hall);
+  const perFloorRate = BASE_RENT_PER_FLOOR + (isAC ? AC_SURCHARGE_PER_FLOOR : 0);
+  return floors * perFloorRate * Math.max(1, days);
+}
 
 export const EVENT_TYPES = [
   "Wedding",
@@ -23,6 +47,33 @@ export const TIMING_PRESETS = [
 ] as const;
 
 export const REFERENCE_TODAY_ISO = "2026-10-20";
+
+const MONTH_INDEX: Record<string, string> = {
+  jan: "01",
+  feb: "02",
+  mar: "03",
+  apr: "04",
+  may: "05",
+  jun: "06",
+  jul: "07",
+  aug: "08",
+  sep: "09",
+  oct: "10",
+  nov: "11",
+  dec: "12",
+};
+
+/** Parses dates such as "15 Oct 2026", "28–29 Oct 2026", or "2026-10-15" into "YYYY-MM-DD". */
+export function parseDisplayDateToISO(input: string): string {
+  const trimmed = input.trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return trimmed;
+  const match = trimmed.match(/(\d{1,2})(?:[–-]\d{1,2})?\s+([A-Za-z]{3})\s+(\d{4})/);
+  if (!match) return "";
+  const day = match[1].padStart(2, "0");
+  const month = MONTH_INDEX[match[2].toLowerCase()];
+  const year = match[3];
+  return month ? `${year}-${month}-${day}` : "";
+}
 
 /**
  * Checks whether two venue selections physically overlap.

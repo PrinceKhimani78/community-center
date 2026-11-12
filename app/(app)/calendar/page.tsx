@@ -687,7 +687,7 @@ export default function CalendarPage() {
                           >
                             <div>
                               <div className="font-bold text-[#0B2A5B] text-[13px]">
-                                {b.eventTitle} · {b.applicantName}
+                                {b.applicantName} · {b.eventTitle}
                               </div>
                               <div className="text-[11.5px] text-[#5B6474]">{b.timing}</div>
                             </div>
@@ -796,10 +796,10 @@ export default function CalendarPage() {
                       <div className="flex items-start justify-between gap-2">
                         <div className="min-w-0">
                           <div className="font-bold text-[#0B2A5B] text-[14.5px] truncate">
-                            {b.eventTitle}
+                            {b.applicantName}
                           </div>
                           <div className="text-[12.5px] text-[#5B6474] mt-0.5">
-                            {b.applicantName}
+                            {b.eventTitle}
                           </div>
                           <div className="text-[12px] text-[#5B6474] mt-1">
                             {b.timing} · {b.hall}

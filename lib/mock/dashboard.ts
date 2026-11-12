@@ -196,6 +196,18 @@ export interface StaffAttendanceRecord {
   absentDays?: number;
 }
 
+export interface StaffAttendanceLogEntry {
+  id: string;
+  staffId: string;
+  dateISO: string;
+  name: string;
+  roleTitle: string;
+  checkInTime: string;
+  checkOutTime: string;
+  geoVerified: boolean;
+  status: "Present" | "Late" | "Absent";
+}
+
 export interface ApprovalItem {
   id: string;
   type: "Free Hall Use" | "Deposit Refund" | "Expense" | "Repair Cost";
@@ -209,19 +221,20 @@ export interface ApprovalItem {
 
 export interface NotificationRecord {
   id: string;
-  category: "Money" | "Bookings" | "Repairs" | "Approvals";
+  category: "Money" | "Bookings" | "Repairs" | "Approvals" | "Attendance";
   title: string;
   detail: string;
   timeLabel: string;
   unread: boolean;
   href: string;
+  audience?: "admin" | "all";
 }
 
 export interface AuditLogEntry {
   id: string;
   timeLabel: string;
   userLabel: string;
-  module: "Booking" | "Payment" | "Maintenance" | "Approval" | "User";
+  module: "Booking" | "Payment" | "Maintenance" | "Approval" | "User" | "Attendance" | "Settings";
   action: string;
   detail: string;
 }
@@ -963,6 +976,89 @@ export const INITIAL_STAFF_ATTENDANCE: StaffAttendanceRecord[] = [
   { id: "st-5", name: "Salimbhai Qureshi", roleTitle: "Security (night)", checkInTime: "—", checkOutTime: "—", geoVerified: false, status: "Absent", presentDays: 14, lateDays: 1, absentDays: 2 },
   { id: "st-6", name: "NaziyaBen Saiyed", roleTitle: "Accountant", checkInTime: "09:00 AM", checkOutTime: "—", geoVerified: true, status: "Present", presentDays: 16, lateDays: 1, absentDays: 0 },
 ];
+
+const OCT_WORKING_DATES = [
+  "2026-10-20",
+  "2026-10-19",
+  "2026-10-17",
+  "2026-10-16",
+  "2026-10-15",
+  "2026-10-14",
+  "2026-10-13",
+  "2026-10-12",
+  "2026-10-10",
+  "2026-10-09",
+  "2026-10-08",
+  "2026-10-07",
+  "2026-10-06",
+  "2026-10-05",
+  "2026-10-03",
+  "2026-10-02",
+  "2026-10-01",
+] as const;
+
+const LATE_DATES_BY_STAFF: Record<string, string[]> = {
+  "st-1": ["2026-10-14"],
+  "st-2": [],
+  "st-3": ["2026-10-09"],
+  "st-4": ["2026-10-20", "2026-10-12"],
+  "st-5": ["2026-10-08"],
+  "st-6": ["2026-10-16"],
+};
+
+const ABSENT_DATES_BY_STAFF: Record<string, string[]> = {
+  "st-1": [],
+  "st-2": [],
+  "st-3": ["2026-10-05"],
+  "st-4": ["2026-10-07"],
+  "st-5": ["2026-10-20", "2026-10-13"],
+  "st-6": [],
+};
+
+export const INITIAL_ATTENDANCE_LOGS: StaffAttendanceLogEntry[] = OCT_WORKING_DATES.flatMap(
+  (dateISO, dateIdx) =>
+    INITIAL_STAFF_ATTENDANCE.map((staff) => {
+      if (dateISO === "2026-10-20") {
+        return {
+          id: `${dateISO}-${staff.id}`,
+          staffId: staff.id,
+          dateISO,
+          name: staff.name,
+          roleTitle: staff.roleTitle,
+          checkInTime: staff.checkInTime,
+          checkOutTime: staff.checkOutTime,
+          geoVerified: staff.geoVerified,
+          status: staff.status,
+        };
+      }
+      const isAbsent = (ABSENT_DATES_BY_STAFF[staff.id] || []).includes(dateISO);
+      const isLate = (LATE_DATES_BY_STAFF[staff.id] || []).includes(dateISO);
+      const status: StaffAttendanceLogEntry["status"] = isAbsent
+        ? "Absent"
+        : isLate
+        ? "Late"
+        : "Present";
+      const checkInTime = isAbsent
+        ? "—"
+        : isLate
+        ? `09:${14 + (dateIdx % 5)} AM`
+        : staff.checkInTime !== "—"
+        ? staff.checkInTime
+        : "08:55 AM";
+      const checkOutTime = isAbsent ? "—" : staff.id === "st-5" ? "06:30 AM" : "06:15 PM";
+      return {
+        id: `${dateISO}-${staff.id}`,
+        staffId: staff.id,
+        dateISO,
+        name: staff.name,
+        roleTitle: staff.roleTitle,
+        checkInTime,
+        checkOutTime,
+        geoVerified: !isAbsent,
+        status,
+      };
+    })
+);
 
 export const INITIAL_APPROVALS: ApprovalItem[] = [
   {

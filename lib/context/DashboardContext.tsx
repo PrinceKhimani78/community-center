@@ -1,6 +1,23 @@
 "use client";
 
-import React, { createContext, useContext, useState, useCallback, ReactNode } from "react";
+import React, {
+  createContext,
+  useContext,
+  useState,
+  useCallback,
+  useSyncExternalStore,
+  ReactNode,
+} from "react";
+import {
+  CENTRE_COORDINATES,
+  GEOFENCE_RADIUS_METERS,
+  formatDistanceMeters,
+} from "@/lib/utils/geofence";
+import {
+  BASE_RENT_PER_FLOOR,
+  AC_SURCHARGE_PER_FLOOR,
+  DEFAULT_SECURITY_DEPOSIT,
+} from "@/lib/utils/bookings";
 import {
   ActionItem,
   ApplicantRecord,
@@ -41,6 +58,39 @@ export interface MyAttendanceState {
   checkedIn: boolean;
   checkInTime: string | null;
   checkOutTime: string | null;
+  geoVerified?: boolean;
+  distanceMeters?: number | null;
+  latitude?: number | null;
+  longitude?: number | null;
+}
+
+export interface GeoCheckPayload {
+  distanceMeters: number;
+  latitude: number;
+  longitude: number;
+  withinFence: boolean;
+}
+
+export interface AdminAlertInput {
+  category?: NotificationRecord["category"];
+  title: string;
+  detail: string;
+  href?: string;
+  auditAction?: string;
+}
+
+export interface SystemSettingsState {
+  centreName: string;
+  centreLocation: string;
+  geofenceLatitude: number;
+  geofenceLongitude: number;
+  geofenceRadiusMeters: number;
+  requireGpsForCheckIn: boolean;
+  routeAllAlertsToAdmin: boolean;
+  baseRentPerFloor: number;
+  acSurchargePerFloor: number;
+  defaultSecurityDeposit: number;
+  requireFreeUseAdminApproval: boolean;
 }
 
 interface DashboardContextType {
@@ -48,6 +98,7 @@ interface DashboardContextType {
   userId: string;
   actionItems: ActionItem[];
   actionCount: number;
+  unreadAlertCount: number;
   lastCompleted: CompletedRecord | null;
   completeAction: (id: string) => void;
   undoAction: () => void;
@@ -73,6 +124,7 @@ interface DashboardContextType {
   notifications: NotificationRecord[];
   auditLogs: AuditLogEntry[];
   users: SystemUser[];
+  systemSettings: SystemSettingsState;
 
   // Actions
   addBooking: (booking: Omit<BookingRecord, "id" | "receiptNo">) => BookingRecord;
@@ -112,11 +164,16 @@ interface DashboardContextType {
     bookingReceiptNo: string,
     mode: "Before Event" | "After Event"
   ) => void;
-  toggleMyCheckIn: () => void;
+  toggleMyCheckIn: (geo?: GeoCheckPayload) => void;
+  addAdminAlert: (input: AdminAlertInput) => void;
   decideApproval: (approvalId: string, decision: "Approved" | "Rejected") => void;
   markAllNotificationsRead: () => void;
   toggleNotificationRead: (notificationId: string) => void;
   toggleUserActive: (userId: string) => void;
+  addUser: (input: { name: string; userId: string; role: SystemUser["role"] }) => SystemUser;
+  removeUser: (targetUserId: string) => void;
+  updateSystemSettings: (updates: Partial<SystemSettingsState>) => void;
+  resetSystemSettings: () => void;
 }
 
 const DashboardContext = createContext<DashboardContextType | undefined>(undefined);
@@ -134,6 +191,114 @@ function getCurrentTimeLabel() {
     hour12: true,
   });
 }
+
+function createLocalStore<T>(storageKey: string, initialValue: T) {
+  let memoryCache: T = initialValue;
+  let initialized = false;
+  const listeners = new Set<() => void>();
+
+  const getSnapshot = (): T => {
+    if (typeof window === "undefined") return initialValue;
+    if (initialized) return memoryCache;
+    initialized = true;
+    try {
+      const raw = window.localStorage.getItem(storageKey);
+      if (raw) {
+        memoryCache = JSON.parse(raw) as T;
+      }
+    } catch {
+      memoryCache = initialValue;
+    }
+    return memoryCache;
+  };
+
+  const subscribe = (listener: () => void) => {
+    listeners.add(listener);
+    const onStorage = (e: StorageEvent) => {
+      if (e.key === storageKey) {
+        initialized = false;
+        getSnapshot();
+        listeners.forEach((l) => l());
+      }
+    };
+    if (typeof window !== "undefined") {
+      window.addEventListener("storage", onStorage);
+    }
+    return () => {
+      listeners.delete(listener);
+      if (typeof window !== "undefined") {
+        window.removeEventListener("storage", onStorage);
+      }
+    };
+  };
+
+  const set = (updater: T | ((prev: T) => T)) => {
+    const current = getSnapshot();
+    const next = typeof updater === "function" ? (updater as (prev: T) => T)(current) : updater;
+    memoryCache = next;
+    initialized = true;
+    if (typeof window !== "undefined") {
+      try {
+        window.localStorage.setItem(storageKey, JSON.stringify(next));
+      } catch {
+        // Ignore storage quota errors
+      }
+    }
+    listeners.forEach((l) => l());
+  };
+
+  return {
+    getSnapshot,
+    getServerSnapshot: () => initialValue,
+    subscribe,
+    set,
+  };
+}
+
+const INITIAL_MY_ATTENDANCE: MyAttendanceState = {
+  checkedIn: false,
+  checkInTime: null,
+  checkOutTime: null,
+  geoVerified: false,
+  distanceMeters: null,
+  latitude: null,
+  longitude: null,
+};
+
+export const DEFAULT_SYSTEM_SETTINGS: SystemSettingsState = {
+  centreName: "Haji Mohamed Yunus Valibhoy Community Centre",
+  centreLocation: "Dhari, Gujarat, India",
+  geofenceLatitude: CENTRE_COORDINATES.latitude,
+  geofenceLongitude: CENTRE_COORDINATES.longitude,
+  geofenceRadiusMeters: GEOFENCE_RADIUS_METERS,
+  requireGpsForCheckIn: true,
+  routeAllAlertsToAdmin: true,
+  baseRentPerFloor: BASE_RENT_PER_FLOOR,
+  acSurchargePerFloor: AC_SURCHARGE_PER_FLOOR,
+  defaultSecurityDeposit: DEFAULT_SECURITY_DEPOSIT,
+  requireFreeUseAdminApproval: true,
+};
+
+const notificationsStore = createLocalStore<NotificationRecord[]>(
+  "valibhoy_admin_notifications_v1",
+  INITIAL_NOTIFICATIONS
+);
+const auditLogsStore = createLocalStore<AuditLogEntry[]>(
+  "valibhoy_audit_logs_v1",
+  INITIAL_AUDIT_LOGS
+);
+const myAttendanceStore = createLocalStore<MyAttendanceState>(
+  "valibhoy_my_attendance_v1",
+  INITIAL_MY_ATTENDANCE
+);
+const usersStore = createLocalStore<SystemUser[]>(
+  "valibhoy_system_users_v1",
+  INITIAL_SYSTEM_USERS
+);
+const settingsStore = createLocalStore<SystemSettingsState>(
+  "valibhoy_system_settings_v1",
+  DEFAULT_SYSTEM_SETTINGS
+);
 
 export function DashboardProvider({
   children,
@@ -155,22 +320,41 @@ export function DashboardProvider({
   const [hallCheckMode, setHallCheckMode] = useState<"Before Event" | "After Event">("After Event");
   const [hallCheckItems, setHallCheckItems] = useState<HallCheckItem[]>(INITIAL_HALL_CHECK_ITEMS);
   const [staffAttendance] = useState<StaffAttendanceRecord[]>(INITIAL_STAFF_ATTENDANCE);
-  const [myAttendance, setMyAttendance] = useState<MyAttendanceState>({
-    checkedIn: false,
-    checkInTime: null,
-    checkOutTime: null,
-  });
+  const myAttendance = useSyncExternalStore(
+    myAttendanceStore.subscribe,
+    myAttendanceStore.getSnapshot,
+    myAttendanceStore.getServerSnapshot
+  );
   const [approvals, setApprovals] = useState<ApprovalItem[]>(INITIAL_APPROVALS);
-  const [notifications, setNotifications] = useState<NotificationRecord[]>(INITIAL_NOTIFICATIONS);
-  const [auditLogs, setAuditLogs] = useState<AuditLogEntry[]>(INITIAL_AUDIT_LOGS);
-  const [users, setUsers] = useState<SystemUser[]>(INITIAL_SYSTEM_USERS);
+  const notifications = useSyncExternalStore(
+    notificationsStore.subscribe,
+    notificationsStore.getSnapshot,
+    notificationsStore.getServerSnapshot
+  );
+  const auditLogs = useSyncExternalStore(
+    auditLogsStore.subscribe,
+    auditLogsStore.getSnapshot,
+    auditLogsStore.getServerSnapshot
+  );
+  const users = useSyncExternalStore(
+    usersStore.subscribe,
+    usersStore.getSnapshot,
+    usersStore.getServerSnapshot
+  );
+  const systemSettings = useSyncExternalStore(
+    settingsStore.subscribe,
+    settingsStore.getSnapshot,
+    settingsStore.getServerSnapshot
+  );
+
+  const unreadAlertCount = notifications.filter((n) => n.unread).length;
 
   const appendLog = useCallback(
     (module: AuditLogEntry["module"], action: string, detail: string) => {
       const actor = role === "admin" ? "Admin" : "Manager";
-      setAuditLogs((prev) => [
+      auditLogsStore.set((prev) => [
         {
-          id: `log-${Date.now()}`,
+          id: `log-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
           timeLabel: `Today · ${getCurrentTimeLabel()}`,
           userLabel: actor,
           module,
@@ -181,6 +365,35 @@ export function DashboardProvider({
       ]);
     },
     [role]
+  );
+
+  const addAdminAlert = useCallback(
+    ({
+      category = "Attendance",
+      title,
+      detail,
+      href = "/attendance",
+      auditAction,
+    }: AdminAlertInput) => {
+      const nowLabel = getCurrentTimeLabel();
+      notificationsStore.set((prev) => [
+        {
+          id: `not-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+          category,
+          title,
+          detail,
+          timeLabel: `Today · ${nowLabel}`,
+          unread: true,
+          href,
+          audience: "admin",
+        },
+        ...prev,
+      ]);
+      if (auditAction) {
+        appendLog(category === "Attendance" ? "Attendance" : "Booking", auditAction, detail);
+      }
+    },
+    [appendLog]
   );
 
   const completeAction = useCallback((id: string) => {
@@ -613,15 +826,54 @@ export function DashboardProvider({
     [hallCheckItems, bookings, appendLog]
   );
 
-  const toggleMyCheckIn = useCallback(() => {
-    const now = getCurrentTimeLabel();
-    setMyAttendance((prev) => {
-      if (!prev.checkedIn) {
-        return { checkedIn: true, checkInTime: now, checkOutTime: null };
-      }
-      return { checkedIn: false, checkInTime: prev.checkInTime, checkOutTime: now };
-    });
-  }, []);
+  const toggleMyCheckIn = useCallback(
+    (geo?: GeoCheckPayload) => {
+      const now = getCurrentTimeLabel();
+      const actor = role === "admin" ? "Admin" : "Manager";
+      const checkingIn = !myAttendance.checkedIn;
+
+      myAttendanceStore.set((prev) => {
+        if (!prev.checkedIn) {
+          return {
+            checkedIn: true,
+            checkInTime: now,
+            checkOutTime: null,
+            geoVerified: geo?.withinFence ?? false,
+            distanceMeters: geo?.distanceMeters ?? null,
+            latitude: geo?.latitude ?? null,
+            longitude: geo?.longitude ?? null,
+          };
+        }
+        return {
+          checkedIn: false,
+          checkInTime: prev.checkInTime,
+          checkOutTime: now,
+          geoVerified: geo?.withinFence ?? prev.geoVerified,
+          distanceMeters: geo?.distanceMeters ?? prev.distanceMeters,
+          latitude: geo?.latitude ?? prev.latitude,
+          longitude: geo?.longitude ?? prev.longitude,
+        };
+      });
+
+      const distLabel =
+        geo && typeof geo.distanceMeters === "number"
+          ? `${formatDistanceMeters(geo.distanceMeters)} from centre`
+          : "GPS verified";
+      const coordLabel =
+        geo && typeof geo.latitude === "number" && typeof geo.longitude === "number"
+          ? ` (${geo.latitude.toFixed(5)}, ${geo.longitude.toFixed(5)})`
+          : "";
+
+      addAdminAlert({
+        category: "Attendance",
+        title: `${actor} ${checkingIn ? "checked in" : "checked out"} · ${distLabel}`,
+        detail: `${actor} completed geo-verified ${checkingIn ? "check-in" : "check-out"} at ${now} (${distLabel}${coordLabel}).`,
+        href: "/attendance",
+        auditAction: `Geo-verified ${checkingIn ? "check-in" : "check-out"}`,
+      });
+    },
+    [myAttendance.checkedIn, role, addAdminAlert]
+  );
 
   const decideApproval = useCallback(
     (approvalId: string, decision: "Approved" | "Rejected") => {
@@ -634,24 +886,71 @@ export function DashboardProvider({
   );
 
   const markAllNotificationsRead = useCallback(() => {
-    setNotifications((prev) => prev.map((n) => ({ ...n, unread: false })));
+    notificationsStore.set((prev) => prev.map((n) => ({ ...n, unread: false })));
   }, []);
 
   const toggleNotificationRead = useCallback((notificationId: string) => {
-    setNotifications((prev) =>
+    notificationsStore.set((prev) =>
       prev.map((n) => (n.id === notificationId ? { ...n, unread: !n.unread } : n))
     );
   }, []);
 
   const toggleUserActive = useCallback(
     (targetUserId: string) => {
-      setUsers((prev) =>
+      usersStore.set((prev) =>
         prev.map((u) => (u.id === targetUserId ? { ...u, active: !u.active } : u))
       );
       appendLog("User", "Changed user active status", targetUserId);
     },
     [appendLog]
   );
+
+  const addUser = useCallback(
+    (input: { name: string; userId: string; role: SystemUser["role"] }): SystemUser => {
+      const created: SystemUser = {
+        id: `u-${Date.now()}`,
+        userId: input.userId.trim(),
+        name: input.name.trim(),
+        role: input.role,
+        lastLogin: "Not signed in yet",
+        active: true,
+      };
+      usersStore.set((prev) => [created, ...prev]);
+      appendLog("User", `Added ${created.role} account`, `${created.name} (${created.userId})`);
+      return created;
+    },
+    [appendLog]
+  );
+
+  const removeUser = useCallback(
+    (targetUserId: string) => {
+      const target = usersStore.getSnapshot().find((u) => u.id === targetUserId);
+      usersStore.set((prev) => prev.filter((u) => u.id !== targetUserId));
+      appendLog(
+        "User",
+        "Removed user account",
+        target ? `${target.name} (${target.userId})` : targetUserId
+      );
+    },
+    [appendLog]
+  );
+
+  const updateSystemSettings = useCallback(
+    (updates: Partial<SystemSettingsState>) => {
+      settingsStore.set((prev) => ({ ...prev, ...updates }));
+      appendLog(
+        "Settings",
+        "Updated admin settings",
+        `Geo-fence ${updates.geofenceRadiusMeters ?? settingsStore.getSnapshot().geofenceRadiusMeters} m`
+      );
+    },
+    [appendLog]
+  );
+
+  const resetSystemSettings = useCallback(() => {
+    settingsStore.set(DEFAULT_SYSTEM_SETTINGS);
+    appendLog("Settings", "Reset settings to defaults", "Restored centre & pricing defaults");
+  }, [appendLog]);
 
   return (
     <DashboardContext.Provider
@@ -660,6 +959,7 @@ export function DashboardProvider({
         userId,
         actionItems,
         actionCount: actionItems.length,
+        unreadAlertCount,
         lastCompleted,
         completeAction,
         undoAction,
@@ -683,6 +983,7 @@ export function DashboardProvider({
         notifications,
         auditLogs,
         users,
+        systemSettings,
         addBooking,
         updateBooking,
         cancelBooking,
@@ -699,10 +1000,15 @@ export function DashboardProvider({
         setHallCheckItemStatus,
         saveInspectionToDepositRefund,
         toggleMyCheckIn,
+        addAdminAlert,
         decideApproval,
         markAllNotificationsRead,
         toggleNotificationRead,
         toggleUserActive,
+        addUser,
+        removeUser,
+        updateSystemSettings,
+        resetSystemSettings,
       }}
     >
       {children}
