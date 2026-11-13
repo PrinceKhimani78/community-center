@@ -17,6 +17,7 @@ import {
   UserCheck,
   Users,
   Settings,
+  CheckSquare,
   HelpCircle,
   LogOut,
   ChevronRight,
@@ -27,7 +28,7 @@ interface NavItem {
   label: string;
   href: string;
   icon: React.ComponentType<{ className?: string; style?: React.CSSProperties }>;
-  badge?: "actionCount" | "fixedYellow";
+  badge?: "actionCount" | "pendingApprovals" | "fixedYellow";
 }
 
 const MAIN_NAV_ITEMS: NavItem[] = [
@@ -44,6 +45,7 @@ const MAIN_NAV_ITEMS: NavItem[] = [
 ];
 
 const ADMIN_NAV_ITEMS: NavItem[] = [
+  { label: "Approvals", href: "/approvals", icon: CheckSquare, badge: "pendingApprovals" },
   { label: "Users", href: "/users", icon: Users },
   { label: "Settings", href: "/settings", icon: Settings },
   { label: "Help & Guide", href: "/help", icon: HelpCircle },
@@ -52,8 +54,9 @@ const ADMIN_NAV_ITEMS: NavItem[] = [
 export default function Sidebar() {
   const pathname = usePathname();
   const router = useRouter();
-  const { role, actionCount, unreadAlertCount } = useDashboard();
+  const { role, actionCount, unreadAlertCount, approvals } = useDashboard();
   const notifBadgeCount = role === "admin" ? unreadAlertCount : actionCount;
+  const pendingApprovalCount = approvals.filter((a) => a.status === "Pending").length;
   const [hoveredHref, setHoveredHref] = useState<string | null>(null);
   const [isLogoutHovered, setIsLogoutHovered] = useState(false);
 
@@ -153,7 +156,8 @@ export default function Sidebar() {
                 </div>
 
                 <div className="flex items-center gap-1.5 shrink-0">
-                  {item.badge === "actionCount" && notifBadgeCount > 0 && (
+                  {((item.badge === "actionCount" && notifBadgeCount > 0) ||
+                    (item.badge === "pendingApprovals" && pendingApprovalCount > 0)) && (
                     <span
                       style={{
                         backgroundColor: "#DC2626",
@@ -162,7 +166,7 @@ export default function Sidebar() {
                       }}
                       className="h-[18px] min-w-[18px] px-1.5 rounded-full text-[10.5px] font-bold flex items-center justify-center"
                     >
-                      {notifBadgeCount}
+                      {item.badge === "pendingApprovals" ? pendingApprovalCount : notifBadgeCount}
                     </span>
                   )}
 

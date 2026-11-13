@@ -1,4 +1,9 @@
-import type { BookingRecord, BookingStatus, HallName } from "@/lib/mock/dashboard";
+import type {
+  BookingRecord,
+  BookingStatus,
+  HallName,
+  MaintenanceTicket,
+} from "@/lib/mock/dashboard";
 
 export const BASE_RENT_PER_FLOOR = 5000;
 export const AC_SURCHARGE_PER_FLOOR = 2000;
@@ -100,6 +105,61 @@ export function isDateInRange(
 ): boolean {
   const effectiveEnd = endISO && endISO >= startISO ? endISO : startISO;
   return dateISO >= startISO && dateISO <= effectiveEnd;
+}
+
+/** Checks if a given single date + hall conflicts with any non-cancelled booking or maintenance block. */
+export function getHallDateConflict(
+  dateISO: string,
+  hall: string,
+  bookings: BookingRecord[],
+  tickets: MaintenanceTicket[],
+  excludeBookingId?: string
+): { available: boolean; reason?: string } {
+  const bookingClash = bookings.find(
+    (b) =>
+      b.id !== excludeBookingId &&
+      b.status !== "Cancelled" &&
+      hallsConflict(b.hall, hall) &&
+      isDateInRange(dateISO, b.dateISO, b.endDateISO)
+  );
+  if (bookingClash) {
+    return {
+      available: false,
+      reason: `Booked (#${bookingClash.receiptNo} · ${bookingClash.eventTitle})`,
+    };
+  }
+
+  const maintenanceClash = tickets.find(
+    (t) =>
+      t.blockHall &&
+      t.blockDateISO === dateISO &&
+      hallsConflict(t.location, hall)
+  );
+  if (maintenanceClash) {
+    return {
+      available: false,
+      reason: `Maintenance (${maintenanceClash.ticketNo})`,
+    };
+  }
+
+  return { available: true };
+}
+
+/** Returns true when no hall matching hallFilter (default "All") is free on dateISO. */
+export function isDateFullyBooked(
+  dateISO: string,
+  bookings: BookingRecord[],
+  tickets: MaintenanceTicket[],
+  hallFilter = "All",
+  excludeBookingId?: string
+): boolean {
+  const targetHalls =
+    hallFilter === "All"
+      ? HALL_OPTIONS
+      : HALL_OPTIONS.filter((h) => hallsConflict(h, hallFilter));
+  return targetHalls.every(
+    (h) => !getHallDateConflict(dateISO, h, bookings, tickets, excludeBookingId).available
+  );
 }
 
 /** Checks whether two date ranges [startA, endA] and [startB, endB] overlap. */

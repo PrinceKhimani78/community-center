@@ -210,7 +210,18 @@ export interface StaffAttendanceLogEntry {
 
 export interface ApprovalItem {
   id: string;
-  type: "Free Hall Use" | "Deposit Refund" | "Expense" | "Repair Cost";
+  type:
+    | "Booking"
+    | "Free Hall Use"
+    | "Booking Cancellation"
+    | "User Access"
+    | "Deposit Refund"
+    | "Expense"
+    | "Repair Cost"
+    | "Hall Block"
+    | "Record Payment"
+    | "Customer Edit"
+    | "Attendance Override";
   title: string;
   detail: string;
   amountLabel: string;
@@ -247,6 +258,17 @@ export interface SystemUser {
   password?: string;
   lastLogin: string;
   active: boolean;
+  approvalStatus?: "Pending" | "Approved" | "Rejected";
+}
+
+export interface RolePermissionItem {
+  id: string;
+  role: SystemUser["role"];
+  module: string;
+  canView: boolean;
+  canCreate: boolean;
+  canEdit: boolean;
+  canApprove: boolean;
 }
 
 export const INITIAL_TODAY_HALL: TodayHallInfo = {
@@ -1178,8 +1200,65 @@ export const INITIAL_AUDIT_LOGS: AuditLogEntry[] = [
 ];
 
 export const INITIAL_SYSTEM_USERS: SystemUser[] = [
-  { id: "u-1", userId: "admin", name: "Haji Valibhoy Trustee", role: "Admin", password: "admin123", lastLogin: "Today, 9:40 AM", active: true },
-  { id: "u-2", userId: "manager", name: "Centre Manager", role: "Manager", password: "manager123", lastLogin: "Today, 9:05 AM", active: true },
-  { id: "u-3", userId: "accounts", name: "Imtiyaz Accountant", role: "Accountant", password: "accounts123", lastLogin: "Yesterday, 6:15 PM", active: true },
-  { id: "u-4", userId: "caretaker", name: "Irfanbhai Bloch", role: "Staff", password: "staff123", lastLogin: "Today, 8:55 AM", active: true },
+  { id: "u-1", userId: "admin", name: "Haji Valibhoy Trustee", role: "Admin", password: "admin123", lastLogin: "Today, 9:40 AM", active: true, approvalStatus: "Approved" },
+  { id: "u-2", userId: "manager", name: "Centre Manager", role: "Manager", password: "manager123", lastLogin: "Today, 9:05 AM", active: true, approvalStatus: "Approved" },
+  { id: "u-3", userId: "accounts", name: "Imtiyaz Accountant", role: "Accountant", password: "accounts123", lastLogin: "Yesterday, 6:15 PM", active: true, approvalStatus: "Approved" },
+  { id: "u-4", userId: "caretaker", name: "Irfanbhai Bloch", role: "Staff", password: "staff123", lastLogin: "Today, 8:55 AM", active: true, approvalStatus: "Approved" },
+];
+
+export const PERMISSION_MODULES = [
+  "Dashboard",
+  "Bookings",
+  "Calendar",
+  "Customers",
+  "Payments",
+  "Expenses",
+  "Deposit Refunds",
+  "Maintenance",
+  "Inspections",
+  "Attendance",
+  "Approvals",
+  "Reports",
+  "Users",
+  "Settings",
+  "Audit Logs",
+] as const;
+
+export const INITIAL_ROLE_PERMISSIONS: RolePermissionItem[] = [
+  ...PERMISSION_MODULES.map((mod) => ({
+    id: `rp-admin-${mod.toLowerCase().replace(/\s+/g, "-")}`,
+    role: "Admin" as const,
+    module: mod,
+    canView: true,
+    canCreate: mod !== "Audit Logs",
+    canEdit: mod !== "Audit Logs",
+    canApprove: true,
+  })),
+  ...["Dashboard", "Bookings", "Calendar", "Customers", "Payments", "Expenses", "Deposit Refunds", "Maintenance", "Inspections", "Attendance", "Reports"].map((mod) => ({
+    id: `rp-mgr-${mod.toLowerCase().replace(/\s+/g, "-")}`,
+    role: "Manager" as const,
+    module: mod,
+    canView: true,
+    canCreate: !["Dashboard", "Reports"].includes(mod),
+    canEdit: ["Bookings", "Calendar", "Customers", "Deposit Refunds", "Maintenance", "Inspections"].includes(mod),
+    canApprove: false,
+  })),
+  ...["Dashboard", "Bookings", "Customers", "Payments", "Expenses", "Deposit Refunds", "Reports"].map((mod) => ({
+    id: `rp-acc-${mod.toLowerCase().replace(/\s+/g, "-")}`,
+    role: "Accountant" as const,
+    module: mod,
+    canView: true,
+    canCreate: ["Payments", "Expenses", "Deposit Refunds"].includes(mod),
+    canEdit: mod === "Deposit Refunds",
+    canApprove: false,
+  })),
+  ...["Dashboard", "Bookings", "Calendar", "Maintenance", "Inspections", "Attendance"].map((mod) => ({
+    id: `rp-stf-${mod.toLowerCase().replace(/\s+/g, "-")}`,
+    role: "Staff" as const,
+    module: mod,
+    canView: true,
+    canCreate: ["Maintenance", "Inspections", "Attendance"].includes(mod),
+    canEdit: ["Maintenance", "Inspections"].includes(mod),
+    canApprove: false,
+  })),
 ];

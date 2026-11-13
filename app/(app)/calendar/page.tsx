@@ -22,6 +22,7 @@ import {
   formatFullWeekdayDate,
   getMultiDayIndex,
   hallsConflict,
+  isDateFullyBooked,
   isDateInRange,
 } from "@/lib/utils/bookings";
 
@@ -93,6 +94,12 @@ export default function CalendarPage() {
 
   const selectedData = getEventsForDate(selectedDateISO);
   const selectedTotalCount = selectedData.dayBookings.length + selectedData.dayBlocks.length;
+  const selectedDateBookedOut = isDateFullyBooked(
+    selectedDateISO,
+    bookings,
+    tickets,
+    hallFilter
+  );
 
   const blockClashBooking = useMemo(() => {
     return bookings.find(
@@ -295,19 +302,31 @@ export default function CalendarPage() {
                 <span>Block for Maintenance</span>
               </button>
 
-              <Link
-                href={`/bookings/new?date=${selectedDateISO}`}
-                style={{
-                  minHeight: "42px",
-                  background: "linear-gradient(135deg, #071E47 0%, #0B2A5B 100%)",
-                  color: "#FFFFFF",
-                  borderRadius: "10px",
-                }}
-                className="interactive-btn px-4 py-2 text-[13px] font-bold inline-flex items-center gap-1.5"
-              >
-                <Plus className="w-4 h-4" />
-                <span>Reserve</span>
-              </Link>
+              {selectedDateBookedOut ? (
+                <button
+                  type="button"
+                  disabled
+                  style={{ minHeight: "42px" }}
+                  className="px-4 py-2 rounded-[10px] bg-slate-200 text-slate-500 text-[13px] font-bold inline-flex items-center gap-1.5 cursor-not-allowed"
+                  title="All matching halls are booked or blocked on this date"
+                >
+                  <span>Fully Booked</span>
+                </button>
+              ) : (
+                <Link
+                  href={`/bookings/new?date=${selectedDateISO}`}
+                  style={{
+                    minHeight: "42px",
+                    background: "linear-gradient(135deg, #071E47 0%, #0B2A5B 100%)",
+                    color: "#FFFFFF",
+                    borderRadius: "10px",
+                  }}
+                  className="interactive-btn px-4 py-2 text-[13px] font-bold inline-flex items-center gap-1.5"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>Reserve</span>
+                </Link>
+              )}
             </div>
           </div>
         </div>
@@ -441,6 +460,12 @@ export default function CalendarPage() {
                     const { dayBookings, dayBlocks } = getEventsForDate(cell.iso);
                     const isSelected = selectedDateISO === cell.iso;
                     const isToday = cell.iso === REFERENCE_TODAY_ISO;
+                    const cellBookedOut = isDateFullyBooked(
+                      cell.iso,
+                      bookings,
+                      tickets,
+                      hallFilter
+                    );
 
                     const combined = [
                       ...dayBookings.map((b) => {
@@ -471,26 +496,43 @@ export default function CalendarPage() {
                         style={{
                           border: isSelected
                             ? "2px solid #0B2A5B"
+                            : cellBookedOut
+                            ? "1px solid #CBD5E1"
                             : isToday
                             ? "1.5px solid #C9971C"
                             : "1px solid #EFE4CC",
-                          backgroundColor: isSelected
+                          backgroundColor: cellBookedOut
+                            ? "#E2E8F0"
+                            : isSelected
                             ? "#EFF6FF"
                             : isToday
                             ? "#FFFDF2"
                             : "#FFFFFF",
                         }}
-                        className="h-24 rounded-xl p-1.5 flex flex-col justify-between text-left cursor-pointer hover:border-[#E2B544] transition-all overflow-hidden"
+                        className={`h-24 rounded-xl p-1.5 flex flex-col justify-between text-left transition-all overflow-hidden ${
+                          cellBookedOut
+                            ? "opacity-80 cursor-not-allowed"
+                            : "cursor-pointer hover:border-[#E2B544]"
+                        }`}
                       >
                         <div className="flex items-center justify-between gap-1">
                           <span
                             className={`text-[12px] font-bold ${
-                              isToday ? "text-[#C9971C]" : "text-[#0B2A5B]"
+                              cellBookedOut
+                                ? "text-slate-500 line-through"
+                                : isToday
+                                ? "text-[#C9971C]"
+                                : "text-[#0B2A5B]"
                             }`}
                           >
                             {cell.day}
                             {isToday ? " · Today" : ""}
                           </span>
+                          {cellBookedOut && (
+                            <span className="text-[9.5px] font-bold px-1.5 py-0.5 rounded bg-slate-300 text-slate-700">
+                              Booked
+                            </span>
+                          )}
                         </div>
 
                         <div className="space-y-1 overflow-hidden">
@@ -525,6 +567,12 @@ export default function CalendarPage() {
                     }
                     const { dayBookings, dayBlocks } = getEventsForDate(cell.iso);
                     const isSelected = selectedDateISO === cell.iso;
+                    const cellBookedOut = isDateFullyBooked(
+                      cell.iso,
+                      bookings,
+                      tickets,
+                      hallFilter
+                    );
                     const dots = [
                       ...dayBookings.map((b) => STATUS_VISUALS[b.status].dot),
                       ...dayBlocks.map(() => STATUS_VISUALS.Maintenance.dot),
@@ -536,7 +584,11 @@ export default function CalendarPage() {
                         type="button"
                         onClick={() => setSelectedDateISO(cell.iso)}
                         className={`h-12 rounded-xl flex flex-col items-center justify-center gap-1 cursor-pointer transition-all ${
-                          isSelected
+                          cellBookedOut
+                            ? isSelected
+                              ? "bg-slate-600 text-white"
+                              : "bg-slate-200 text-slate-400"
+                            : isSelected
                             ? "bg-[#0B2A5B] text-white shadow-xs"
                             : dots.length > 0
                             ? "bg-[#FAF5EB] text-[#0B2A5B]"
@@ -745,12 +797,18 @@ export default function CalendarPage() {
                 <span className="text-[12px] font-semibold text-[#5B6474]">
                   {selectedTotalCount} {selectedTotalCount === 1 ? "item" : "items"}
                 </span>
-                <Link
-                  href={`/bookings/new?date=${selectedDateISO}`}
-                  className="md:hidden text-[12.5px] font-bold text-[#0B2A5B]"
-                >
-                  + Reserve
-                </Link>
+                {selectedDateBookedOut ? (
+                  <span className="md:hidden text-[11.5px] font-bold text-slate-500">
+                    Booked
+                  </span>
+                ) : (
+                  <Link
+                    href={`/bookings/new?date=${selectedDateISO}`}
+                    className="md:hidden text-[12.5px] font-bold text-[#0B2A5B]"
+                  >
+                    + Reserve
+                  </Link>
+                )}
               </div>
             </div>
 

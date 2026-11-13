@@ -30,7 +30,7 @@ import {
   useDashboard,
   type SystemSettingsState,
 } from "@/lib/context/DashboardContext";
-import type { SystemUser } from "@/lib/mock/dashboard";
+import { PERMISSION_MODULES, type SystemUser } from "@/lib/mock/dashboard";
 import PageShell from "@/components/common/PageShell";
 import TabBar, { TabItem } from "@/components/common/TabBar";
 import StatusBadge from "@/components/common/StatusBadge";
@@ -120,6 +120,43 @@ function SettingsEditor({
                 }}
                 className="w-full h-10 px-3 rounded-xl border border-[#E5D9BF] bg-[#FAF7F2] text-[13.5px] font-semibold text-[#0B2A5B] focus:outline-none focus:ring-2 focus:ring-[#E2B544]"
               />
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="block text-[12px] font-semibold text-[#5B6474] mb-1">
+                  Centre Phone
+                </label>
+                <input
+                  type="text"
+                  value={draft.centrePhone || ""}
+                  placeholder="e.g. +91 98250 00000"
+                  onChange={(e) => {
+                    setSavedNotice(false);
+                    setDraft((p) => ({ ...p, centrePhone: e.target.value }));
+                  }}
+                  className="w-full h-10 px-3 rounded-xl border border-[#E5D9BF] bg-[#FAF7F2] text-[13.5px] font-semibold text-[#0B2A5B] focus:outline-none focus:ring-2 focus:ring-[#E2B544]"
+                />
+              </div>
+              <div>
+                <label className="block text-[12px] font-semibold text-[#5B6474] mb-1">
+                  Max Upload Size (MB)
+                </label>
+                <input
+                  type="number"
+                  min={1}
+                  max={50}
+                  value={draft.maxUploadSizeMb ?? 5}
+                  onChange={(e) => {
+                    setSavedNotice(false);
+                    setDraft((p) => ({
+                      ...p,
+                      maxUploadSizeMb: Math.max(1, Number(e.target.value) || 5),
+                    }));
+                  }}
+                  className="w-full h-10 px-3 rounded-xl border border-[#E5D9BF] bg-[#FAF7F2] text-[13.5px] font-semibold text-[#0B2A5B] focus:outline-none focus:ring-2 focus:ring-[#E2B544]"
+                />
+              </div>
             </div>
           </div>
         </section>
@@ -286,23 +323,40 @@ function SettingsEditor({
             </div>
           </div>
 
-          <label className="flex items-center justify-between gap-3 rounded-xl bg-[#FAF7F2] border border-[#EFE4CC] px-3.5 py-2.5 cursor-pointer">
-            <span className="text-[13px] font-semibold text-[#14213D]">
-              Require Admin approval for Free Community / Trustee Use manual pricing bookings
-            </span>
-            <input
-              type="checkbox"
-              checked={draft.requireFreeUseAdminApproval}
-              onChange={(e) => {
-                setSavedNotice(false);
-                setDraft((p) => ({
-                  ...p,
-                  requireFreeUseAdminApproval: e.target.checked,
-                }));
-              }}
-              className="w-4 h-4 accent-[#0B2A5B]"
-            />
-          </label>
+          <div className="space-y-2 pt-1">
+            {(
+              [
+                ["requireBookingAdminApproval", "Require Admin approval for all new non-Admin Bookings"],
+                ["requireFreeUseAdminApproval", "Require Admin approval for Free Community / Trustee Use bookings"],
+                ["requireUserAdminApproval", "Require Admin approval for new staff Login / Registration requests"],
+                ["requirePaymentAdminApproval", "Require Admin approval for Recorded Payments"],
+                ["requireCustomerEditAdminApproval", "Require Admin approval for Customer Profile Edits"],
+                ["requireExpenseAdminApproval", "Require Admin approval for Expenses"],
+                ["requireRefundAdminApproval", "Require Admin approval for Security Deposit Refunds"],
+                ["requireRepairAdminApproval", "Require Admin approval for Maintenance & Calendar Blocks"],
+                ["requireAttendanceOverrideAdminApproval", "Require Admin approval for Out-of-Geofence Attendance Overrides"],
+              ] as const
+            ).map(([fieldKey, label]) => (
+              <label
+                key={fieldKey}
+                className="flex items-center justify-between gap-3 rounded-xl bg-[#FAF7F2] border border-[#EFE4CC] px-3.5 py-2.5 cursor-pointer"
+              >
+                <span className="text-[13px] font-semibold text-[#14213D]">{label}</span>
+                <input
+                  type="checkbox"
+                  checked={Boolean(draft[fieldKey])}
+                  onChange={(e) => {
+                    setSavedNotice(false);
+                    setDraft((p) => ({
+                      ...p,
+                      [fieldKey]: e.target.checked,
+                    }));
+                  }}
+                  className="w-4 h-4 accent-[#0B2A5B]"
+                />
+              </label>
+            ))}
+          </div>
         </section>
       </div>
 
@@ -347,14 +401,17 @@ export default function AdminHub({
     payments,
     expenses,
     users,
+    rolePermissions,
     toggleUserActive,
     addUser,
     updateUser,
+    decideUserApproval,
     removeUser,
     auditLogs,
     systemSettings,
     updateSystemSettings,
     resetSystemSettings,
+    updateRolePermission,
   } = useDashboard();
 
   const [activeTab, setActiveTab] = useState<AdminTab>(initialTab);
@@ -863,6 +920,17 @@ export default function AdminHub({
                             >
                               {u.role}
                             </span>
+                            {u.approvalStatus && u.approvalStatus !== "Approved" && (
+                              <span
+                                className={`text-[11px] font-bold px-2.5 py-0.5 rounded-full border ${
+                                  u.approvalStatus === "Pending"
+                                    ? "bg-[#FFFBEB] text-[#B45309] border-[#FDE68A]"
+                                    : "bg-[#FEF2F2] text-[#C62828] border-[#FECACA]"
+                                }`}
+                              >
+                                {u.approvalStatus === "Pending" ? "Pending Admin Approval" : "Rejected"}
+                              </span>
+                            )}
                           </div>
                           <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[12.5px] text-[#5B6474]">
                             <span>
@@ -897,6 +965,28 @@ export default function AdminHub({
                         </div>
 
                         <div className="flex flex-wrap items-center gap-2 shrink-0">
+                          {u.approvalStatus === "Pending" && (
+                            <>
+                              <button
+                                type="button"
+                                onClick={() => decideUserApproval(u.id, "Approved")}
+                                style={{ minHeight: "38px" }}
+                                className="interactive-btn px-3 py-1.5 rounded-xl bg-[#15803D] text-white text-[12px] font-bold inline-flex items-center gap-1 cursor-pointer"
+                              >
+                                <Check className="w-3.5 h-3.5" />
+                                <span>Approve</span>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => decideUserApproval(u.id, "Rejected")}
+                                style={{ minHeight: "38px" }}
+                                className="interactive-btn px-3 py-1.5 rounded-xl bg-white border border-red-200 text-[#C62828] text-[12px] font-bold inline-flex items-center gap-1 cursor-pointer"
+                              >
+                                <X className="w-3.5 h-3.5" />
+                                <span>Reject</span>
+                              </button>
+                            </>
+                          )}
                           <button
                             type="button"
                             onClick={() => openEditUserModal(u)}
@@ -939,6 +1029,79 @@ export default function AdminHub({
                     );
                   })
                 )}
+              </div>
+
+              {/* Roles & Permissions Grid (Design Spec 4.22) */}
+              <div className="bg-white rounded-2xl border border-[#EFE4CC] p-5 space-y-3 shadow-2xs">
+                <div>
+                  <h2 className="text-[16px] font-bold text-[#0B2A5B]">
+                    Roles &amp; Permissions Matrix
+                  </h2>
+                  <p className="text-[12.5px] text-[#5B6474]">
+                    Admin holds full approval authority across all modules. Toggle View / Create / Edit access per role.
+                  </p>
+                </div>
+
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left border-collapse text-[12.5px]">
+                    <thead>
+                      <tr className="border-b border-[#EFE4CC] text-[#5B6474] uppercase text-[11px]">
+                        <th className="py-2 pr-3 font-bold">Module</th>
+                        {ROLE_OPTIONS.map((r) => (
+                          <th key={r} className="py-2 px-3 font-bold text-center">
+                            {r}
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-[#F5EFE0]">
+                      {PERMISSION_MODULES.map((mod) => (
+                        <tr key={mod}>
+                          <td className="py-2.5 pr-3 font-semibold text-[#0B2A5B] whitespace-nowrap">
+                            {mod}
+                          </td>
+                          {ROLE_OPTIONS.map((r) => {
+                            const perm = rolePermissions.find(
+                              (p) => p.role === r && p.module === mod
+                            );
+                            const isLockedAdmin = r === "Admin";
+                            return (
+                              <td key={r} className="py-2 px-2 text-center whitespace-nowrap">
+                                <div className="inline-flex items-center gap-2">
+                                  {(["canView", "canCreate", "canEdit"] as const).map((field) => {
+                                    const shortLabel =
+                                      field === "canView" ? "V" : field === "canCreate" ? "C" : "E";
+                                    const checked = isLockedAdmin
+                                      ? field === "canView" || mod !== "Audit Logs"
+                                      : Boolean(perm?.[field]);
+                                    return (
+                                      <label
+                                        key={field}
+                                        title={`${r} · ${mod} · ${field.replace("can", "")}`}
+                                        className="inline-flex items-center gap-0.5 text-[11px] font-semibold text-[#5B6474] cursor-pointer"
+                                      >
+                                        <input
+                                          type="checkbox"
+                                          disabled={isLockedAdmin}
+                                          checked={checked}
+                                          onChange={(e) =>
+                                            updateRolePermission(r, mod, field, e.target.checked)
+                                          }
+                                          className="w-3.5 h-3.5 accent-[#0B2A5B] disabled:opacity-60"
+                                        />
+                                        <span>{shortLabel}</span>
+                                      </label>
+                                    );
+                                  })}
+                                </div>
+                              </td>
+                            );
+                          })}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               </div>
             </div>
           )}

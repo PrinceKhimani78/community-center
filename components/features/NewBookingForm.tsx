@@ -13,6 +13,7 @@ import {
   Sparkles,
 } from "lucide-react";
 import { useDashboard } from "@/lib/context/DashboardContext";
+import BookingDatePicker from "@/components/common/BookingDatePicker";
 import type { BookingRecord, BookingStatus, HallName, PaymentMode } from "@/lib/mock/dashboard";
 import {
   AC_SURCHARGE_PER_FLOOR,
@@ -24,6 +25,7 @@ import {
   dateRangesOverlap,
   formatShortDate,
   getFloorCount,
+  getHallDateConflict,
   hallsConflict,
   isDateInRange,
 } from "@/lib/utils/bookings";
@@ -97,9 +99,12 @@ export default function NewBookingForm({
   onSaved,
 }: NewBookingFormProps) {
   const router = useRouter();
-  const { applicants, bookings, tickets, addBooking, updateBooking, addApplicant } = useDashboard();
+  const { role, systemSettings, applicants, bookings, tickets, addBooking, updateBooking, addApplicant } = useDashboard();
 
   const isEdit = Boolean(editBooking);
+  const requiresBookingApproval =
+    role !== "admin" &&
+    (systemSettings.requireBookingAdminApproval || systemSettings.requireFreeUseAdminApproval);
   const initialTimes = splitTiming(editBooking?.timing || "10:00 AM – 10:00 PM");
 
   const initialCustomer = initialCustomerId
@@ -127,13 +132,23 @@ export default function NewBookingForm({
         : editBooking.eventType
       : ""
   );
-  const [hall, setHall] = useState<HallName>(
-    editBooking?.hall || initialHall || "Ground + First Floor"
-  );
+  const defaultHall: HallName = editBooking?.hall || initialHall || "Ground + First Floor";
+  const [hall, setHall] = useState<HallName>(defaultHall);
   const [isAC, setIsAC] = useState(editBooking ? editBooking.isAC : true);
   const [guests, setGuests] = useState(editBooking?.guests ?? 250);
 
-  const defaultStartISO = editBooking?.dateISO || initialDateISO || "2026-10-30";
+  const defaultStartISO = (() => {
+    if (editBooking?.dateISO) return editBooking.dateISO;
+    if (initialDateISO) return initialDateISO;
+    let candidate = "2026-10-30";
+    for (let i = 0; i < 60; i++) {
+      if (getHallDateConflict(candidate, defaultHall, bookings, tickets).available) {
+        return candidate;
+      }
+      candidate = addOneDayISO(candidate);
+    }
+    return "2026-10-30";
+  })();
   const [dateISO, setDateISO] = useState(defaultStartISO);
   const [isMultiDay, setIsMultiDay] = useState(
     Boolean(editBooking?.endDateISO && editBooking.endDateISO > editBooking.dateISO)
@@ -167,11 +182,15 @@ export default function NewBookingForm({
   );
   const [paid, setPaid] = useState(editBooking?.paid ?? 5000);
   const [paymentMode, setPaymentMode] = useState<PaymentMode>(editBooking?.paymentMode || "UPI");
-  const [status, setStatus] = useState<BookingStatus>(editBooking?.status || "Pending");
+  const [status, setStatus] = useState<BookingStatus>(
+    editBooking?.status || (role === "admin" ? "Confirmed" : "Awaiting approval")
+  );
   const [notes, setNotes] = useState(editBooking?.notes || "");
 
   const [savedReceipt, setSavedReceipt] = useState<string | null>(null);
+  const [savedStatus, setSavedStatus] = useState<BookingStatus | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [showAdvanceErrorDialog, setShowAdvanceErrorDialog] = useState(false);
 
   const effectiveEndISO = isMultiDay && endDateISO >= dateISO ? endDateISO : undefined;
@@ -248,12 +267,13 @@ export default function NewBookingForm({
       setManualDeposit(0);
       setPaid(0);
     } else if (status === "Awaiting approval") {
-      setStatus("Pending");
+      setStatus(requiresBookingApproval ? "Awaiting approval" : role === "admin" ? "Confirmed" : "Pending");
     }
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSubmitting) return;
     setFormError(null);
 
     if (!dateISO) {
@@ -262,6 +282,12 @@ export default function NewBookingForm({
     }
     if (isMultiDay && endDateISO < dateISO) {
       setFormError("End date cannot be earlier than start date.");
+      return;
+    }
+    if (selectedHallStatus && !selectedHallStatus.available) {
+      setFormError(
+        `${hall} is already unavailable on ${dateRangeLabel} (${selectedHallStatus.note}). Please pick another date or hall.`
+      );
       return;
     }
 
@@ -331,6 +357,23 @@ export default function NewBookingForm({
       ? `${baseTitle} (${effectiveRent === 0 ? "free use" : "trustee"})`
       : baseTitle;
 
+    const needsAdminReview =
+      role !== "admin" &&
+      (systemSettings.requireBookingAdminApproval ||
+        (isFreeUse && systemSettings.requireFreeUseAdminApproval));
+
+    const resolvedSubmitStatus: BookingStatus = editBooking
+      ? role !== "admin" && status === "Confirmed" && editBooking.status !== "Confirmed"
+        ? editBooking.status
+        : status
+      : needsAdminReview
+      ? "Awaiting approval"
+      : role === "admin"
+      ? status
+      : status === "Confirmed"
+      ? "Pending"
+      : status;
+
     const payload = {
       eventTitle,
       eventType: resolvedEventType,
@@ -347,20 +390,31 @@ export default function NewBookingForm({
       rent: effectiveRent,
       deposit: effectiveDeposit,
       paid: effectivePaid,
-      status,
+      status: resolvedSubmitStatus,
       isFreeUse,
       notes: notes.trim(),
       paymentMode,
     };
 
-    if (editBooking) {
-      updateBooking(editBooking.id, payload);
-      setSavedReceipt(editBooking.receiptNo);
-      onSaved?.(editBooking.receiptNo);
-    } else {
-      const created = addBooking(payload);
-      setSavedReceipt(created.receiptNo);
-      onSaved?.(created.receiptNo);
+    setIsSubmitting(true);
+    try {
+      if (editBooking) {
+        const updated = await updateBooking(editBooking.id, payload);
+        setSavedStatus(updated?.status || resolvedSubmitStatus);
+        setSavedReceipt(editBooking.receiptNo);
+        onSaved?.(editBooking.receiptNo);
+      } else {
+        const created = await addBooking(payload);
+        setSavedStatus(created.status);
+        setSavedReceipt(created.receiptNo);
+        onSaved?.(created.receiptNo);
+      }
+    } catch (err) {
+      setFormError(
+        err instanceof Error ? err.message : "Could not save booking. Please check details and try again."
+      );
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -377,11 +431,17 @@ export default function NewBookingForm({
       >
         <CheckCircle2 className="w-12 h-12 text-emerald-600 mx-auto mb-3" />
         <h2 style={{ color: "#0B2A5B", fontSize: "20px", fontWeight: 700 }}>
-          {isEdit ? `Booking Updated (#${savedReceipt})` : `Booking Saved (#${savedReceipt})`}
+          {isEdit
+            ? `Booking Updated (#${savedReceipt})`
+            : savedStatus === "Awaiting approval"
+            ? `Booking Submitted for Admin Approval (#${savedReceipt})`
+            : `Booking Saved (#${savedReceipt})`}
         </h2>
         <p style={{ color: "#5B6474", fontSize: "14px" }} className="mt-1.5">
           {isEdit
             ? "All changes have been saved and logged in the activity history."
+            : savedStatus === "Awaiting approval"
+            ? "Sent to the Admin approval queue. It will stay Awaiting approval until an Admin confirms it."
             : "The booking is now listed in Bookings and shown on the Calendar."}
         </p>
         <div className="flex flex-wrap items-center justify-center gap-3 mt-6">
@@ -603,18 +663,19 @@ export default function NewBookingForm({
               <label className="block text-[12.5px] font-semibold text-[#14213D] mb-1.5">
                 Start Date
               </label>
-              <input
-                type="date"
+              <BookingDatePicker
                 value={dateISO}
-                onChange={(e) => {
-                  const next = e.target.value;
+                onChange={(next) => {
                   setDateISO(next);
                   if (isMultiDay && endDateISO < next) {
                     setEndDateISO(addOneDayISO(next));
                   }
                 }}
-                style={{ minHeight: "44px" }}
-                className="w-full rounded-xl border border-[#E5D9BF] bg-[#FAF7F2] px-3.5 text-[13.5px] text-[#0B2A5B] focus:outline-none focus:ring-2 focus:ring-[#E2B544]"
+                hall={hall}
+                bookings={bookings}
+                tickets={tickets}
+                excludeBookingId={editBooking?.id}
+                ariaLabel="Start Date"
               />
             </div>
 
@@ -623,13 +684,16 @@ export default function NewBookingForm({
                 <label className="block text-[12.5px] font-semibold text-[#14213D] mb-1.5">
                   End Date
                 </label>
-                <input
-                  type="date"
-                  min={dateISO}
+                <BookingDatePicker
                   value={endDateISO}
-                  onChange={(e) => setEndDateISO(e.target.value)}
-                  style={{ minHeight: "44px" }}
-                  className="w-full rounded-xl border border-[#E5D9BF] bg-[#FAF7F2] px-3.5 text-[13.5px] text-[#0B2A5B] focus:outline-none focus:ring-2 focus:ring-[#E2B544]"
+                  onChange={setEndDateISO}
+                  hall={hall}
+                  bookings={bookings}
+                  tickets={tickets}
+                  excludeBookingId={editBooking?.id}
+                  minDateISO={dateISO}
+                  rangeStartISO={dateISO}
+                  ariaLabel="End Date"
                 />
               </div>
             )}
@@ -1057,32 +1121,51 @@ export default function NewBookingForm({
             <label className="block text-[12px] font-semibold text-white/80 mb-1.5">
               Status
             </label>
-            <select
-              value={status}
-              onChange={(e) => setStatus(e.target.value as BookingStatus)}
-              style={{ minHeight: "42px" }}
-              className="w-full rounded-xl bg-white px-3.5 text-[13.5px] font-bold text-[#0B2A5B] focus:outline-none focus:ring-2 focus:ring-[#E2B544]"
-            >
-              <option value="Pending">Pending</option>
-              <option value="Confirmed">Confirmed</option>
-              <option value="Awaiting approval">Awaiting approval</option>
-              {isEdit && <option value="Completed">Completed</option>}
-              {isEdit && <option value="Cancelled">Cancelled</option>}
-            </select>
+            {!isEdit &&
+            role !== "admin" &&
+            (systemSettings.requireBookingAdminApproval ||
+              (isFreeUse && systemSettings.requireFreeUseAdminApproval)) ? (
+              <div className="w-full rounded-xl bg-amber-500/20 border border-amber-300/40 px-3.5 py-2.5 text-[13px] font-bold text-[#F7E6A9]">
+                Awaiting Admin approval (required before confirmation)
+              </div>
+            ) : (
+              <select
+                value={status}
+                onChange={(e) => setStatus(e.target.value as BookingStatus)}
+                style={{ minHeight: "42px" }}
+                className="w-full rounded-xl bg-white px-3.5 text-[13.5px] font-bold text-[#0B2A5B] focus:outline-none focus:ring-2 focus:ring-[#E2B544]"
+              >
+                <option value="Awaiting approval">Awaiting approval</option>
+                <option value="Pending">Pending</option>
+                {(role === "admin" || (isEdit && editBooking?.status === "Confirmed")) && (
+                  <option value="Confirmed">Confirmed</option>
+                )}
+                {isEdit && <option value="Completed">Completed</option>}
+                {isEdit && role === "admin" && <option value="Cancelled">Cancelled</option>}
+              </select>
+            )}
           </div>
 
           <div className="space-y-2.5 pt-1">
             <button
               type="submit"
+              disabled={isSubmitting}
               style={{
                 minHeight: "46px",
                 background: "linear-gradient(135deg, #F7E6A9 0%, #E2B544 55%, #C9971C 100%)",
                 color: "#041535",
                 borderRadius: "12px",
+                opacity: isSubmitting ? 0.7 : 1,
               }}
               className="interactive-btn w-full text-[14px] font-bold cursor-pointer"
             >
-              {isEdit ? "Update Booking" : "Submit Request"}
+              {isSubmitting
+                ? "Submitting..."
+                : isEdit
+                ? "Update Booking"
+                : role !== "admin" && requiresBookingApproval
+                ? "Submit for Admin Approval"
+                : "Submit Request"}
             </button>
 
             <Link

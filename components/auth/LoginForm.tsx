@@ -8,24 +8,27 @@ interface LoginFormProps {
   className?: string;
 }
 
-const emptySubscribe = () => () => {};
 
 export default function LoginForm({ className = "" }: LoginFormProps) {
   const router = useRouter();
   const userIdInputRef = useRef<HTMLInputElement>(null);
 
-  const isMounted = React.useSyncExternalStore(
-    emptySubscribe,
-    () => true,
-    () => false
-  );
   const [userId, setUserId] = useState("");
   const [password, setPassword] = useState("");
   const [keepMeSignedIn, setKeepMeSignedIn] = useState(true);
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
-  const [forgotPasswordNotice, setForgotPasswordNotice] = useState(false);
+  const [authSuccess, setAuthSuccess] = useState<string | null>(null);
+  const [activeModal, setActiveModal] = useState<"none" | "forgot" | "register">("none");
+  const [forgotUserId, setForgotUserId] = useState("");
+  const [forgotNote, setForgotNote] = useState("");
+  const [regName, setRegName] = useState("");
+  const [regUserId, setRegUserId] = useState("");
+  const [regRole, setRegRole] = useState<"Manager" | "Accountant" | "Staff">("Staff");
+  const [regPassword, setRegPassword] = useState("");
+  const [modalBusy, setModalBusy] = useState(false);
+  const [modalError, setModalError] = useState<string | null>(null);
   const [errors, setErrors] = useState<{ userId?: string; password?: string }>({});
 
   useEffect(() => {
@@ -48,7 +51,7 @@ export default function LoginForm({ className = "" }: LoginFormProps) {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setForgotPasswordNotice(false);
+    setAuthSuccess(null);
 
     if (!validate()) {
       return;
@@ -71,15 +74,83 @@ export default function LoginForm({ className = "" }: LoginFormProps) {
       const data = await response.json();
 
       if (!response.ok || !data.success) {
-        setAuthError("User ID or password is incorrect.");
+        setAuthError(data.message || "User ID or password is incorrect.");
         setIsLoading(false);
         return;
       }
 
       router.push("/dashboard");
     } catch {
-      setAuthError("User ID or password is incorrect.");
+      setAuthError("Unable to reach server. Please try again.");
       setIsLoading(false);
+    }
+  };
+
+  const handleForgotSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!forgotUserId.trim()) {
+      setModalError("Please enter your User ID.");
+      return;
+    }
+    setModalBusy(true);
+    setModalError(null);
+    try {
+      const res = await fetch("/api/auth/forgot-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId: forgotUserId.trim(), note: forgotNote.trim() }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setModalError(data.message || "Failed to send request.");
+      } else {
+        setAuthSuccess(data.message || "Admin has been notified to reset your password.");
+        setActiveModal("none");
+        setForgotUserId("");
+        setForgotNote("");
+      }
+    } catch {
+      setModalError("Network error while contacting server.");
+    } finally {
+      setModalBusy(false);
+    }
+  };
+
+  const handleRegisterSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!regName.trim() || !regUserId.trim() || regPassword.length < 6) {
+      setModalError("Full name, User ID, and password (min 6 chars) are required.");
+      return;
+    }
+    setModalBusy(true);
+    setModalError(null);
+    try {
+      const res = await fetch("/api/auth/register", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: regName.trim(),
+          userId: regUserId.trim().toLowerCase(),
+          role: regRole,
+          password: regPassword,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setModalError(data.message || "Failed to submit login request.");
+      } else {
+        setAuthSuccess(
+          data.message || "Account request submitted. You can sign in after Admin approves it."
+        );
+        setActiveModal("none");
+        setRegName("");
+        setRegUserId("");
+        setRegPassword("");
+      }
+    } catch {
+      setModalError("Network error while contacting server.");
+    } finally {
+      setModalBusy(false);
     }
   };
 
@@ -147,27 +218,27 @@ export default function LoginForm({ className = "" }: LoginFormProps) {
           </div>
         )}
 
-        {/* Forgot Password Notice */}
-        {forgotPasswordNotice && (
+        {/* Success / Approval Notice */}
+        {authSuccess && (
           <div
             role="status"
             style={{
               marginTop: "16px",
               padding: "10px 14px",
               borderRadius: "8px",
-              backgroundColor: "#FFFBEB",
-              border: "1px solid #FDE68A",
-              color: "#92400E",
-              fontSize: "12px",
+              backgroundColor: "#ECFDF5",
+              border: "1px solid #BBF7D0",
+              color: "#15803D",
+              fontSize: "12.5px",
               fontWeight: 500,
             }}
             className="flex items-center justify-between gap-2 animate-fadeIn"
           >
-            <span>Please contact the Admin to reset your password.</span>
+            <span>{authSuccess}</span>
             <button
               type="button"
-              onClick={() => setForgotPasswordNotice(false)}
-              className="text-[#92400E] font-bold hover:underline text-[11px] cursor-pointer"
+              onClick={() => setAuthSuccess(null)}
+              className="text-[#15803D] font-bold hover:underline text-[11px] cursor-pointer shrink-0"
             >
               Dismiss
             </button>
@@ -330,7 +401,11 @@ export default function LoginForm({ className = "" }: LoginFormProps) {
 
           <button
             type="button"
-            onClick={() => setForgotPasswordNotice(true)}
+            onClick={() => {
+              setModalError(null);
+              setForgotUserId(userId);
+              setActiveModal("forgot");
+            }}
             style={{ color: "#2563EB", fontSize: "12.5px", fontWeight: 500 }}
             className="hover:underline transition-colors cursor-pointer whitespace-nowrap"
           >
@@ -371,9 +446,24 @@ export default function LoginForm({ className = "" }: LoginFormProps) {
           )}
         </button>
 
+        {/* Request New Login Link */}
+        <div className="mt-4 text-center">
+          <button
+            type="button"
+            onClick={() => {
+              setModalError(null);
+              setActiveModal("register");
+            }}
+            style={{ color: "#0B2A5B", fontSize: "12.5px", fontWeight: 600 }}
+            className="hover:underline cursor-pointer"
+          >
+            New staff member? Request login access (Admin approval)
+          </button>
+        </div>
+
         {/* Footer line: Secure session · Role-based access */}
         <div
-          style={{ color: "#64748B", fontSize: "12px", marginTop: "22px" }}
+          style={{ color: "#64748B", fontSize: "12px", marginTop: "16px" }}
           className="flex items-center justify-center gap-1.5"
         >
           <ShieldCheck
@@ -384,6 +474,134 @@ export default function LoginForm({ className = "" }: LoginFormProps) {
           <span>Secure session · Role-based access</span>
         </div>
       </form>
+
+      {/* Forgot Password Modal */}
+      {activeModal === "forgot" && (
+        <div role="dialog" aria-modal="true" className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <form onSubmit={handleForgotSubmit} className="w-full max-w-sm rounded-2xl bg-white border border-[#EFE4CC] p-5 shadow-2xl space-y-3.5">
+            <h3 className="text-[16px] font-bold text-[#0B2A5B]">Request Password Reset</h3>
+            <p className="text-[12.5px] text-[#5B6474]">
+              Your request will be sent to Admin to assign a new password.
+            </p>
+            {modalError && (
+              <p className="text-[12px] font-semibold text-[#C62828] bg-[#FEF2F2] border border-[#FECACA] rounded-lg px-3 py-2">
+                {modalError}
+              </p>
+            )}
+            <div>
+              <label className="block text-[12px] font-semibold text-[#5B6474] mb-1">User ID *</label>
+              <input
+                type="text"
+                value={forgotUserId}
+                onChange={(e) => setForgotUserId(e.target.value)}
+                placeholder="Enter your user ID"
+                className="w-full h-10 px-3 rounded-xl border border-[#D6C5A2] text-[13.5px] text-[#061A3E] focus:outline-none focus:ring-2 focus:ring-[#E2B544]"
+              />
+            </div>
+            <div>
+              <label className="block text-[12px] font-semibold text-[#5B6474] mb-1">Reason / Note (optional)</label>
+              <input
+                type="text"
+                value={forgotNote}
+                onChange={(e) => setForgotNote(e.target.value)}
+                placeholder="e.g. Locked out on phone"
+                className="w-full h-10 px-3 rounded-xl border border-[#D6C5A2] text-[13.5px] text-[#061A3E] focus:outline-none focus:ring-2 focus:ring-[#E2B544]"
+              />
+            </div>
+            <div className="flex justify-end gap-2 pt-1">
+              <button
+                type="button"
+                onClick={() => setActiveModal("none")}
+                className="px-4 py-2 rounded-xl border border-[#EFE4CC] text-[12.5px] font-bold text-[#5B6474] cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={modalBusy}
+                className="px-4 py-2 rounded-xl bg-[#0B2A5B] text-white text-[12.5px] font-bold cursor-pointer disabled:opacity-60"
+              >
+                {modalBusy ? "Sending…" : "Notify Admin"}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {/* Request New Login Modal */}
+      {activeModal === "register" && (
+        <div role="dialog" aria-modal="true" className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <form onSubmit={handleRegisterSubmit} className="w-full max-w-sm rounded-2xl bg-white border border-[#EFE4CC] p-5 shadow-2xl space-y-3">
+            <h3 className="text-[16px] font-bold text-[#0B2A5B]">Request New Login Account</h3>
+            <p className="text-[12.5px] text-[#5B6474]">
+              New logins stay pending until reviewed and approved by Admin.
+            </p>
+            {modalError && (
+              <p className="text-[12px] font-semibold text-[#C62828] bg-[#FEF2F2] border border-[#FECACA] rounded-lg px-3 py-2">
+                {modalError}
+              </p>
+            )}
+            <div>
+              <label className="block text-[12px] font-semibold text-[#5B6474] mb-1">Full Name *</label>
+              <input
+                type="text"
+                value={regName}
+                onChange={(e) => setRegName(e.target.value)}
+                placeholder="e.g. Yusuf Patel"
+                className="w-full h-10 px-3 rounded-xl border border-[#D6C5A2] text-[13.5px] text-[#061A3E] focus:outline-none focus:ring-2 focus:ring-[#E2B544]"
+              />
+            </div>
+            <div>
+              <label className="block text-[12px] font-semibold text-[#5B6474] mb-1">Desired User ID *</label>
+              <input
+                type="text"
+                value={regUserId}
+                onChange={(e) => setRegUserId(e.target.value)}
+                placeholder="e.g. yusuf"
+                className="w-full h-10 px-3 rounded-xl border border-[#D6C5A2] text-[13.5px] text-[#061A3E] focus:outline-none focus:ring-2 focus:ring-[#E2B544]"
+              />
+            </div>
+            <div>
+              <label className="block text-[12px] font-semibold text-[#5B6474] mb-1">Role *</label>
+              <select
+                value={regRole}
+                onChange={(e) => setRegRole(e.target.value as "Manager" | "Accountant" | "Staff")}
+                className="w-full h-10 px-3 rounded-xl border border-[#D6C5A2] text-[13.5px] text-[#061A3E] font-semibold focus:outline-none focus:ring-2 focus:ring-[#E2B544]"
+              >
+                <option value="Staff">Staff</option>
+                <option value="Manager">Manager</option>
+                <option value="Accountant">Accountant</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-[12px] font-semibold text-[#5B6474] mb-1">Password (min 6 chars) *</label>
+              <input
+                type="password"
+                value={regPassword}
+                onChange={(e) => setRegPassword(e.target.value)}
+                placeholder="Enter password"
+                className="w-full h-10 px-3 rounded-xl border border-[#D6C5A2] text-[13.5px] text-[#061A3E] focus:outline-none focus:ring-2 focus:ring-[#E2B544]"
+              />
+            </div>
+            <div className="flex justify-end gap-2 pt-1">
+              <button
+                type="button"
+                onClick={() => setActiveModal("none")}
+                className="px-4 py-2 rounded-xl border border-[#EFE4CC] text-[12.5px] font-bold text-[#5B6474] cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={modalBusy}
+                className="px-4 py-2 rounded-xl bg-[#0B2A5B] text-white text-[12.5px] font-bold cursor-pointer disabled:opacity-60"
+              >
+                {modalBusy ? "Submitting…" : "Submit Request"}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
     </div>
   );
 }

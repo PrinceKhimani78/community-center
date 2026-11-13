@@ -5,6 +5,7 @@ import React, {
   useContext,
   useState,
   useCallback,
+  useEffect,
   useSyncExternalStore,
   ReactNode,
 } from "react";
@@ -39,12 +40,14 @@ import {
   INITIAL_MAINTENANCE_TICKETS,
   INITIAL_NOTIFICATIONS,
   INITIAL_PAYMENTS,
+  INITIAL_ROLE_PERMISSIONS,
   INITIAL_STAFF_ATTENDANCE,
   INITIAL_SYSTEM_USERS,
   MaintenanceTicket,
   NotificationRecord,
   PaymentMode,
   PaymentRecord,
+  RolePermissionItem,
   StaffAttendanceRecord,
   SystemUser,
 } from "@/lib/mock/dashboard";
@@ -82,6 +85,7 @@ export interface AdminAlertInput {
 export interface SystemSettingsState {
   centreName: string;
   centreLocation: string;
+  centrePhone: string;
   geofenceLatitude: number;
   geofenceLongitude: number;
   geofenceRadiusMeters: number;
@@ -90,7 +94,16 @@ export interface SystemSettingsState {
   baseRentPerFloor: number;
   acSurchargePerFloor: number;
   defaultSecurityDeposit: number;
+  maxUploadSizeMb: number;
   requireFreeUseAdminApproval: boolean;
+  requireBookingAdminApproval: boolean;
+  requireUserAdminApproval: boolean;
+  requirePaymentAdminApproval: boolean;
+  requireCustomerEditAdminApproval: boolean;
+  requireExpenseAdminApproval: boolean;
+  requireRefundAdminApproval: boolean;
+  requireRepairAdminApproval: boolean;
+  requireAttendanceOverrideAdminApproval: boolean;
 }
 
 interface DashboardContextType {
@@ -124,14 +137,15 @@ interface DashboardContextType {
   notifications: NotificationRecord[];
   auditLogs: AuditLogEntry[];
   users: SystemUser[];
+  rolePermissions: RolePermissionItem[];
   systemSettings: SystemSettingsState;
 
   // Actions
-  addBooking: (booking: Omit<BookingRecord, "id" | "receiptNo">) => BookingRecord;
+  addBooking: (booking: Omit<BookingRecord, "id" | "receiptNo">) => Promise<BookingRecord>;
   updateBooking: (
     bookingId: string,
     updates: Partial<Omit<BookingRecord, "id" | "receiptNo">>
-  ) => BookingRecord | null;
+  ) => Promise<BookingRecord | null>;
   cancelBooking: (bookingId: string, reason?: string) => void;
   updateBookingStatus: (bookingId: string, status: BookingStatus) => void;
   addApplicant: (applicant: Omit<ApplicantRecord, "id">) => ApplicantRecord;
@@ -178,11 +192,18 @@ interface DashboardContextType {
   }) => SystemUser;
   updateUser: (
     targetUserId: string,
-    updates: Partial<Pick<SystemUser, "name" | "userId" | "role" | "password" | "active">>
+    updates: Partial<Pick<SystemUser, "name" | "userId" | "role" | "password" | "active" | "approvalStatus">>
   ) => void;
+  decideUserApproval: (targetUserId: string, decision: "Approved" | "Rejected") => void;
   removeUser: (targetUserId: string) => void;
   updateSystemSettings: (updates: Partial<SystemSettingsState>) => void;
   resetSystemSettings: () => void;
+  updateRolePermission: (
+    roleName: SystemUser["role"],
+    moduleName: string,
+    field: "canView" | "canCreate" | "canEdit" | "canApprove",
+    value: boolean
+  ) => void;
 }
 
 const DashboardContext = createContext<DashboardContextType | undefined>(undefined);
@@ -277,6 +298,7 @@ const INITIAL_MY_ATTENDANCE: MyAttendanceState = {
 export const DEFAULT_SYSTEM_SETTINGS: SystemSettingsState = {
   centreName: "Haji Mohamed Yunus Valibhoy Community Centre",
   centreLocation: "Dhari, Gujarat, India",
+  centrePhone: "",
   geofenceLatitude: CENTRE_COORDINATES.latitude,
   geofenceLongitude: CENTRE_COORDINATES.longitude,
   geofenceRadiusMeters: GEOFENCE_RADIUS_METERS,
@@ -285,7 +307,16 @@ export const DEFAULT_SYSTEM_SETTINGS: SystemSettingsState = {
   baseRentPerFloor: BASE_RENT_PER_FLOOR,
   acSurchargePerFloor: AC_SURCHARGE_PER_FLOOR,
   defaultSecurityDeposit: DEFAULT_SECURITY_DEPOSIT,
+  maxUploadSizeMb: 5,
   requireFreeUseAdminApproval: true,
+  requireBookingAdminApproval: true,
+  requireUserAdminApproval: true,
+  requirePaymentAdminApproval: true,
+  requireCustomerEditAdminApproval: true,
+  requireExpenseAdminApproval: true,
+  requireRefundAdminApproval: true,
+  requireRepairAdminApproval: true,
+  requireAttendanceOverrideAdminApproval: true,
 };
 
 const notificationsStore = createLocalStore<NotificationRecord[]>(
@@ -307,6 +338,10 @@ const usersStore = createLocalStore<SystemUser[]>(
 const settingsStore = createLocalStore<SystemSettingsState>(
   "valibhoy_system_settings_v1",
   DEFAULT_SYSTEM_SETTINGS
+);
+const rolePermissionsStore = createLocalStore<RolePermissionItem[]>(
+  "valibhoy_role_permissions_v1",
+  INITIAL_ROLE_PERMISSIONS
 );
 
 export function DashboardProvider({
@@ -350,11 +385,76 @@ export function DashboardProvider({
     usersStore.getSnapshot,
     usersStore.getServerSnapshot
   );
+  const rolePermissions = useSyncExternalStore(
+    rolePermissionsStore.subscribe,
+    rolePermissionsStore.getSnapshot,
+    rolePermissionsStore.getServerSnapshot
+  );
   const systemSettings = useSyncExternalStore(
     settingsStore.subscribe,
     settingsStore.getSnapshot,
     settingsStore.getServerSnapshot
   );
+
+  // Module 1 & 2: Hydrate state from backend MariaDB via /api/bootstrap when BACKEND_API_URL is active
+  const refreshBootstrap = useCallback(async () => {
+    try {
+      const res = await fetch("/api/bootstrap", { cache: "no-store" });
+      if (!res.ok) return;
+      const payload = await res.json();
+      if (!payload?.data) return;
+      const d = payload.data;
+      if (Array.isArray(d.bookings)) setBookings(d.bookings);
+      if (Array.isArray(d.applicants)) setApplicants(d.applicants);
+      if (Array.isArray(d.payments)) setPayments(d.payments);
+      if (Array.isArray(d.expenses)) setExpenses(d.expenses);
+      if (Array.isArray(d.depositRefunds)) setRefunds(d.depositRefunds);
+      if (Array.isArray(d.maintenanceTickets)) setTickets(d.maintenanceTickets);
+      if (Array.isArray(d.hallCheckItems) && d.hallCheckItems.length > 0) {
+        setHallCheckItems(d.hallCheckItems);
+      }
+      if (Array.isArray(d.approvals)) setApprovals(d.approvals);
+      if (Array.isArray(d.actionItems)) setActionItems(d.actionItems);
+      if (Array.isArray(d.notifications)) notificationsStore.set(d.notifications);
+      if (Array.isArray(d.auditLogs)) auditLogsStore.set(d.auditLogs);
+      if (d.systemSettings) settingsStore.set((prev) => ({ ...prev, ...d.systemSettings }));
+      if (Array.isArray(d.rolePermissions) && d.rolePermissions.length > 0) {
+        rolePermissionsStore.set(d.rolePermissions);
+      }
+      if (role === "admin" && Array.isArray(d.users) && d.users.length > 0) {
+        usersStore.set(d.users);
+      }
+    } catch {
+      // Fall back to local mock state when backend is unavailable
+    }
+  }, [role]);
+
+  useEffect(() => {
+    const triggerRefresh = () => {
+      void refreshBootstrap();
+    };
+    const handleVisibility = () => {
+      if (document.visibilityState === "visible") {
+        triggerRefresh();
+      }
+    };
+
+    const timer = window.setTimeout(triggerRefresh, 0);
+    const interval = window.setInterval(() => {
+      if (document.visibilityState === "visible") {
+        triggerRefresh();
+      }
+    }, 10000);
+    window.addEventListener("focus", triggerRefresh);
+    document.addEventListener("visibilitychange", handleVisibility);
+
+    return () => {
+      window.clearTimeout(timer);
+      window.clearInterval(interval);
+      window.removeEventListener("focus", triggerRefresh);
+      document.removeEventListener("visibilitychange", handleVisibility);
+    };
+  }, [refreshBootstrap]);
 
   const unreadAlertCount = notifications.filter((n) => n.unread).length;
 
@@ -432,57 +532,137 @@ export function DashboardProvider({
   const toggleMobileSidebar = useCallback(() => setIsMobileSidebarOpen((p) => !p), []);
 
   const addBooking = useCallback(
-    (input: Omit<BookingRecord, "id" | "receiptNo">) => {
+    async (input: Omit<BookingRecord, "id" | "receiptNo">): Promise<BookingRecord> => {
       const maxNo = bookings.reduce((max, b) => {
         const parsed = parseInt(b.receiptNo, 10);
         return Number.isFinite(parsed) && parsed > max ? parsed : max;
       }, 1055);
       const nextNo = String(maxNo + 1);
-      const actor = role === "admin" ? "Admin" : "Manager";
-      const created: BookingRecord = {
+      const isAdmin = role === "admin";
+      const actor = isAdmin ? "Admin" : "Manager";
+      const requiresApproval =
+        !isAdmin &&
+        (systemSettings.requireBookingAdminApproval ||
+          (input.isFreeUse && systemSettings.requireFreeUseAdminApproval));
+
+      const enforcedStatus: BookingStatus = requiresApproval
+        ? "Awaiting approval"
+        : isAdmin
+        ? input.status
+        : input.status === "Confirmed"
+        ? "Pending"
+        : input.status;
+
+      const localFallback: BookingRecord = {
         ...input,
+        status: enforcedStatus,
         id: `bk-${nextNo}`,
         receiptNo: nextNo,
-        createdAtLabel: `20 Oct 2026, ${getCurrentTimeLabel()}`,
+        createdAtLabel: `Just now`,
         createdBy: actor,
-        depositStatus: input.isFreeUse ? "N/A" : "Held",
+        depositStatus: input.isFreeUse || input.deposit <= 0 ? "N/A" : "Held",
       };
-      setBookings((prev) => [created, ...prev]);
 
+      const res = await fetch("/api/bookings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...input, receiptNo: nextNo, status: enforcedStatus }),
+      });
+      const payload = await res.json().catch(() => null);
+
+      if (!res.ok) {
+        throw new Error(payload?.message || "Could not save booking.");
+      }
+
+      if (payload?.booking) {
+        const serverBooking: BookingRecord = payload.booking;
+        setBookings((prev) => [serverBooking, ...prev]);
+        void refreshBootstrap();
+        return serverBooking;
+      }
+
+      // Offline / non-backend mock fallback
+      setBookings((prev) => [localFallback, ...prev]);
       if (input.paid > 0) {
         const payRec: PaymentRecord = {
           id: `pay-${Date.now()}`,
           receiptNo: `REC-2026-${nextNo}`,
-          bookingId: created.id,
-          bookingReceiptNo: created.receiptNo,
-          applicantName: created.applicantName,
-          eventTitle: `${created.eventTitle} (${created.dateLabel})`,
+          bookingId: localFallback.id,
+          bookingReceiptNo: localFallback.receiptNo,
+          applicantName: localFallback.applicantName,
+          eventTitle: `${localFallback.eventTitle} (${localFallback.dateLabel})`,
           type: "Advance",
           amount: input.paid,
           mode: input.paymentMode || "Cash",
           reference: `ADV-${nextNo}`,
-          dateLabel: "20 Oct 2026",
+          dateLabel: localFallback.dateLabel,
         };
         setPayments((prev) => [payRec, ...prev]);
+      }
+
+      if (requiresApproval) {
+        const totalCharges = Number(input.rent || 0) + Number(input.deposit || 0);
+        setApprovals((prev) => [
+          {
+            id: `apr-${Date.now()}`,
+            type: input.isFreeUse ? "Free Hall Use" : "Booking",
+            title: `${input.isFreeUse ? "Free Hall Request" : "New Booking"} — ${localFallback.eventTitle}`,
+            detail: `${localFallback.applicantName} (${localFallback.hall}) on ${localFallback.dateLabel} · ${localFallback.timing}`,
+            amountLabel: input.isFreeUse ? "₹0 (Free Use)" : `₹${totalCharges.toLocaleString("en-IN")}`,
+            requester: actor,
+            referenceNo: nextNo,
+            status: "Pending",
+          },
+          ...prev,
+        ]);
       }
 
       appendLog(
         "Booking",
         `Created booking #${nextNo}`,
-        `${created.eventTitle} for ${created.applicantName} on ${created.dateLabel}`
+        `${localFallback.eventTitle} for ${localFallback.applicantName} on ${localFallback.dateLabel}${requiresApproval ? " (Awaiting Admin approval)" : ""}`
       );
-      return created;
+      return localFallback;
     },
-    [bookings, role, appendLog]
+    [bookings, role, systemSettings.requireBookingAdminApproval, systemSettings.requireFreeUseAdminApproval, appendLog, refreshBootstrap]
   );
 
   const updateBooking = useCallback(
-    (bookingId: string, updates: Partial<Omit<BookingRecord, "id" | "receiptNo">>) => {
+    async (
+      bookingId: string,
+      updates: Partial<Omit<BookingRecord, "id" | "receiptNo">>
+    ): Promise<BookingRecord | null> => {
+      const sanitizedUpdates = { ...updates };
+      const existing = bookings.find((b) => b.id === bookingId || b.receiptNo === bookingId);
+      if (sanitizedUpdates.status === "Confirmed" && role !== "admin" && existing?.status !== "Confirmed") {
+        sanitizedUpdates.status = existing?.status || "Awaiting approval";
+      }
+
+      const res = await fetch(`/api/bookings/${encodeURIComponent(bookingId)}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(sanitizedUpdates),
+      });
+      const payload = await res.json().catch(() => null);
+
+      if (!res.ok) {
+        throw new Error(payload?.message || "Could not update booking.");
+      }
+
+      if (payload?.booking) {
+        const serverBooking: BookingRecord = payload.booking;
+        setBookings((prev) =>
+          prev.map((b) => (b.id === serverBooking.id || b.receiptNo === serverBooking.receiptNo ? serverBooking : b))
+        );
+        void refreshBootstrap();
+        return serverBooking;
+      }
+
       let updatedRecord: BookingRecord | null = null;
       setBookings((prev) =>
         prev.map((b) => {
           if (b.id !== bookingId && b.receiptNo !== bookingId) return b;
-          updatedRecord = { ...b, ...updates };
+          updatedRecord = { ...b, ...sanitizedUpdates, status: sanitizedUpdates.status ?? b.status };
           return updatedRecord;
         })
       );
@@ -495,40 +675,72 @@ export function DashboardProvider({
       );
       return updatedRecord;
     },
-    [appendLog]
+    [bookings, role, appendLog, refreshBootstrap]
   );
 
   const cancelBooking = useCallback(
     (bookingId: string, reason?: string) => {
-      setBookings((prev) =>
-        prev.map((b) =>
-          b.id === bookingId || b.receiptNo === bookingId
-            ? {
-              ...b,
-              status: "Cancelled",
-              cancellationReason: reason?.trim() || "Cancelled by staff",
-              depositStatus: b.paid > 0 ? "Refunded" : b.depositStatus,
-            }
-            : b
-        )
-      );
-      appendLog(
-        "Booking",
-        `Cancelled booking #${bookingId.replace(/^bk-/, "")}`,
-        reason?.trim() || "Booking cancelled"
-      );
+      const trimmedReason = reason?.trim() || "Cancelled by staff";
+      if (role === "admin") {
+        setBookings((prev) =>
+          prev.map((b) =>
+            b.id === bookingId || b.receiptNo === bookingId
+              ? {
+                ...b,
+                status: "Cancelled",
+                cancellationReason: trimmedReason,
+                depositStatus: b.paid > 0 ? "Refunded" : b.depositStatus,
+              }
+              : b
+          )
+        );
+        appendLog(
+          "Booking",
+          `Cancelled booking #${bookingId.replace(/^bk-/, "")}`,
+          reason?.trim() || "Booking cancelled"
+        );
+      } else {
+        appendLog(
+          "Booking",
+          `Requested cancellation for #${bookingId.replace(/^bk-/, "")}`,
+          trimmedReason
+        );
+      }
+
+      fetch(`/api/bookings/${encodeURIComponent(bookingId)}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: "Cancelled", cancellationReason: trimmedReason }),
+      })
+        .then((res) => {
+          if (res.ok) refreshBootstrap();
+        })
+        .catch(() => {});
     },
-    [appendLog]
+    [role, appendLog, refreshBootstrap]
   );
 
   const updateBookingStatus = useCallback(
     (bookingId: string, status: BookingStatus) => {
+      if (status === "Confirmed" && role !== "admin") {
+        return;
+      }
       setBookings((prev) =>
         prev.map((b) => (b.id === bookingId || b.receiptNo === bookingId ? { ...b, status } : b))
       );
       appendLog("Booking", `Updated booking status to ${status}`, `Booking ${bookingId}`);
+
+      fetch(`/api/bookings/${encodeURIComponent(bookingId)}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status }),
+      })
+        .then((res) => {
+          if (res.ok) refreshBootstrap();
+        })
+        .catch(() => {});
     },
-    [appendLog]
+    [role, appendLog, refreshBootstrap]
   );
 
   const addApplicant = useCallback(
@@ -543,6 +755,22 @@ export function DashboardProvider({
       };
       setApplicants((prev) => [created, ...prev]);
       appendLog("Booking", `Added customer ${created.name}`, created.phone);
+
+      fetch("/api/applicants", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(input),
+      })
+        .then(async (res) => {
+          const payload = await res.json().catch(() => null);
+          if (res.ok && payload?.applicant) {
+            setApplicants((prev) =>
+              prev.map((a) => (a.id === created.id ? payload.applicant : a))
+            );
+          }
+        })
+        .catch(() => {});
+
       return created;
     },
     [applicants.length, appendLog]
@@ -550,12 +778,30 @@ export function DashboardProvider({
 
   const updateApplicant = useCallback(
     (applicantId: string, updates: Partial<Omit<ApplicantRecord, "id">>) => {
-      setApplicants((prev) =>
-        prev.map((a) => (a.id === applicantId ? { ...a, ...updates } : a))
+      const requiresEditApproval =
+        role !== "admin" && systemSettings.requireCustomerEditAdminApproval;
+      if (!requiresEditApproval) {
+        setApplicants((prev) =>
+          prev.map((a) => (a.id === applicantId ? { ...a, ...updates } : a))
+        );
+      }
+      appendLog(
+        "Booking",
+        requiresEditApproval ? "Requested customer edit (Admin approval)" : "Updated customer profile",
+        applicantId
       );
-      appendLog("Booking", "Updated customer profile", applicantId);
+
+      fetch(`/api/applicants/${encodeURIComponent(applicantId)}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(updates),
+      })
+        .then((res) => {
+          if (res.ok) refreshBootstrap();
+        })
+        .catch(() => {});
     },
-    [appendLog]
+    [role, systemSettings.requireCustomerEditAdminApproval, appendLog, refreshBootstrap]
   );
 
   const recordPayment = useCallback(
@@ -589,11 +835,9 @@ export function DashboardProvider({
         prev.map((b) => {
           if (b.id !== target.id) return b;
           const updatedPaid = b.paid + input.amount;
-          const totalDue = b.rent + b.deposit;
           return {
             ...b,
             paid: updatedPaid,
-            status: updatedPaid >= totalDue && b.status === "Pending" ? "Confirmed" : b.status,
           };
         })
       );
@@ -883,61 +1127,130 @@ export function DashboardProvider({
 
   const decideApproval = useCallback(
     (approvalId: string, decision: "Approved" | "Rejected") => {
+      if (role !== "admin") return;
+      const target = approvals.find((a) => a.id === approvalId);
       setApprovals((prev) =>
         prev.map((a) => (a.id === approvalId ? { ...a, status: decision } : a))
       );
-      appendLog("Approval", `${decision} request`, approvalId);
+      if (target) {
+        if (target.type === "Booking" || target.type === "Free Hall Use") {
+          const nextStatus: BookingStatus = decision === "Approved" ? "Confirmed" : "Cancelled";
+          setBookings((prev) =>
+            prev.map((b) =>
+              b.receiptNo === target.referenceNo
+                ? {
+                    ...b,
+                    status: nextStatus,
+                    cancellationReason: decision === "Rejected" ? "Rejected by Admin" : b.cancellationReason,
+                  }
+                : b
+            )
+          );
+        } else if (target.type === "Booking Cancellation" && decision === "Approved") {
+          setBookings((prev) =>
+            prev.map((b) =>
+              b.receiptNo === target.referenceNo ? { ...b, status: "Cancelled" } : b
+            )
+          );
+        }
+      }
+      appendLog("Approval", `${decision} request`, target?.title || approvalId);
+
+      fetch(`/api/approvals/${encodeURIComponent(approvalId)}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: decision }),
+      })
+        .then((res) => {
+          if (res.ok) refreshBootstrap();
+        })
+        .catch(() => {});
     },
-    [appendLog]
+    [role, approvals, appendLog, refreshBootstrap]
   );
 
   const markAllNotificationsRead = useCallback(() => {
     notificationsStore.set((prev) => prev.map((n) => ({ ...n, unread: false })));
+    fetch("/api/notifications/read-all", { method: "PATCH" }).catch(() => {});
   }, []);
 
   const toggleNotificationRead = useCallback((notificationId: string) => {
+    const current = notificationsStore.getSnapshot().find((n) => n.id === notificationId);
+    const nextUnread = current ? !current.unread : false;
     notificationsStore.set((prev) =>
-      prev.map((n) => (n.id === notificationId ? { ...n, unread: !n.unread } : n))
+      prev.map((n) => (n.id === notificationId ? { ...n, unread: nextUnread } : n))
     );
+    fetch(`/api/notifications/${encodeURIComponent(notificationId)}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ unread: nextUnread }),
+    }).catch(() => {});
   }, []);
 
   const toggleUserActive = useCallback(
     (targetUserId: string) => {
+      const target = usersStore.getSnapshot().find((u) => u.id === targetUserId);
+      const nextActive = target ? !target.active : true;
       usersStore.set((prev) =>
-        prev.map((u) => (u.id === targetUserId ? { ...u, active: !u.active } : u))
+        prev.map((u) => (u.id === targetUserId ? { ...u, active: nextActive } : u))
       );
       appendLog("User", "Changed user active status", targetUserId);
+
+      fetch(`/api/users/${encodeURIComponent(targetUserId)}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ active: nextActive }),
+      }).catch(() => {});
     },
     [appendLog]
   );
 
   const addUser = useCallback(
-      (input: {
-        name: string;
-        userId: string;
-        role: SystemUser["role"];
-        password: string;
-      }): SystemUser => {
-        const created: SystemUser = {
-          id: `u-${Date.now()}`,
-          userId: input.userId.trim(),
-          name: input.name.trim(),
-          role: input.role,
-          password: input.password,
-          lastLogin: "Not signed in yet",
-          active: true,
-        };
-        usersStore.set((prev) => [created, ...prev]);
-        appendLog("User", `Added ${created.role} account`, `${created.name} (${created.userId})`);
-        return created;
-      },
-        [appendLog]
+    (input: {
+      name: string;
+      userId: string;
+      role: SystemUser["role"];
+      password: string;
+    }): SystemUser => {
+      const created: SystemUser = {
+        id: `u-${Date.now()}`,
+        userId: input.userId.trim(),
+        name: input.name.trim(),
+        role: input.role,
+        password: input.password,
+        lastLogin: "Not signed in yet",
+        active: true,
+        approvalStatus: "Approved",
+      };
+      usersStore.set((prev) => [created, ...prev]);
+      appendLog("User", `Added ${created.role} account`, `${created.name} (${created.userId})`);
+
+      fetch("/api/users", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(input),
+      })
+        .then((res) => (res.ok ? res.json() : null))
+        .then((payload) => {
+          if (payload?.user) {
+            usersStore.set((prev) =>
+              prev.map((u) => (u.id === created.id ? payload.user : u))
+            );
+          }
+        })
+        .catch(() => {});
+
+      return created;
+    },
+    [appendLog]
   );
 
   const updateUser = useCallback(
     (
       targetUserId: string,
-      updates: Partial<Pick<SystemUser, "name" | "userId" | "role" | "password" | "active">>
+      updates: Partial<
+        Pick<SystemUser, "name" | "userId" | "role" | "password" | "active" | "approvalStatus">
+      >
     ) => {
       usersStore.set((prev) =>
         prev.map((u) => {
@@ -956,6 +1269,31 @@ export function DashboardProvider({
         changedLabel,
         `${updates.name || targetUserId}${updates.role ? ` · ${updates.role}` : ""}`
       );
+
+      fetch(`/api/users/${encodeURIComponent(targetUserId)}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(updates),
+      }).catch(() => {});
+    },
+    [appendLog]
+  );
+
+  const decideUserApproval = useCallback(
+    (targetUserId: string, decision: "Approved" | "Rejected") => {
+      const nextActive = decision === "Approved";
+      usersStore.set((prev) =>
+        prev.map((u) =>
+          u.id === targetUserId ? { ...u, approvalStatus: decision, active: nextActive } : u
+        )
+      );
+      appendLog("Approval", `${decision} user access`, targetUserId);
+
+      fetch(`/api/users/${encodeURIComponent(targetUserId)}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ approvalStatus: decision, active: nextActive }),
+      }).catch(() => {});
     },
     [appendLog]
   );
@@ -969,18 +1307,29 @@ export function DashboardProvider({
         "Removed user account",
         target ? `${target.name} (${target.userId})` : targetUserId
       );
+
+      fetch(`/api/users/${encodeURIComponent(targetUserId)}`, {
+        method: "DELETE",
+      }).catch(() => {});
     },
     [appendLog]
   );
 
   const updateSystemSettings = useCallback(
     (updates: Partial<SystemSettingsState>) => {
-      settingsStore.set((prev) => ({ ...prev, ...updates }));
+      const nextState = { ...settingsStore.getSnapshot(), ...updates };
+      settingsStore.set(nextState);
       appendLog(
         "Settings",
         "Updated admin settings",
-        `Geo-fence ${updates.geofenceRadiusMeters ?? settingsStore.getSnapshot().geofenceRadiusMeters} m`
+        `Geo-fence ${nextState.geofenceRadiusMeters} m`
       );
+
+      fetch("/api/settings", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(nextState),
+      }).catch(() => {});
     },
     [appendLog]
   );
@@ -988,7 +1337,53 @@ export function DashboardProvider({
   const resetSystemSettings = useCallback(() => {
     settingsStore.set(DEFAULT_SYSTEM_SETTINGS);
     appendLog("Settings", "Reset settings to defaults", "Restored centre & pricing defaults");
+
+    fetch("/api/settings", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(DEFAULT_SYSTEM_SETTINGS),
+    }).catch(() => {});
   }, [appendLog]);
+
+  const updateRolePermission = useCallback(
+    (
+      roleName: SystemUser["role"],
+      moduleName: string,
+      field: "canView" | "canCreate" | "canEdit" | "canApprove",
+      value: boolean
+    ) => {
+      if (roleName === "Admin") return;
+      let updatedSnapshot: RolePermissionItem[] = [];
+      rolePermissionsStore.set((prev) => {
+        const exists = prev.some((p) => p.role === roleName && p.module === moduleName);
+        updatedSnapshot = exists
+          ? prev.map((p) =>
+              p.role === roleName && p.module === moduleName ? { ...p, [field]: value } : p
+            )
+          : [
+              ...prev,
+              {
+                id: `rp-${roleName.toLowerCase()}-${moduleName.toLowerCase().replace(/\s+/g, "-")}`,
+                role: roleName,
+                module: moduleName,
+                canView: field === "canView" ? value : false,
+                canCreate: field === "canCreate" ? value : false,
+                canEdit: field === "canEdit" ? value : false,
+                canApprove: field === "canApprove" ? value : false,
+              },
+            ];
+        return updatedSnapshot;
+      });
+      appendLog("Settings", `Updated ${roleName} permissions`, `${moduleName} (${field}=${value})`);
+
+      fetch("/api/permissions", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ permissions: updatedSnapshot }),
+      }).catch(() => {});
+    },
+    [appendLog]
+  );
 
   return (
     <DashboardContext.Provider
@@ -1021,6 +1416,7 @@ export function DashboardProvider({
         notifications,
         auditLogs,
         users,
+        rolePermissions,
         systemSettings,
         addBooking,
         updateBooking,
@@ -1045,9 +1441,11 @@ export function DashboardProvider({
         toggleUserActive,
         addUser,
         updateUser,
+        decideUserApproval,
         removeUser,
         updateSystemSettings,
         resetSystemSettings,
+        updateRolePermission,
       }}
     >
       {children}

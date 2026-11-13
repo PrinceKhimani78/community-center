@@ -19,6 +19,7 @@ import {
   XCircle,
 } from "lucide-react";
 import { useDashboard } from "@/lib/context/DashboardContext";
+import type { BookingRecord } from "@/lib/mock/dashboard";
 import PageShell from "@/components/common/PageShell";
 import StatusBadge from "@/components/common/StatusBadge";
 import {
@@ -37,8 +38,38 @@ interface TimelineStep {
 
 function BookingDetailsContent() {
   const params = useParams<{ id: string }>();
+  const { bookings } = useDashboard();
+
+  const booking = bookings.find(
+    (b) => b.receiptNo === params.id || b.id === params.id
+  );
+
+  if (!booking) {
+    return (
+      <PageShell hideHeader>
+        <div className="bg-white rounded-2xl border border-[#EFE4CC] p-8 text-center space-y-3">
+          <h1 className="text-[18px] font-bold text-[#0B2A5B]">Booking not found</h1>
+          <p className="text-[13px] text-[#5B6474]">
+            Booking #{params.id} could not be found or is still loading.
+          </p>
+          <Link
+            href="/bookings"
+            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-[#0B2A5B] text-white text-[13px] font-semibold"
+          >
+            <ArrowLeft className="w-4 h-4" />
+            <span>Back to Bookings</span>
+          </Link>
+        </div>
+      </PageShell>
+    );
+  }
+
+  return <BookingDetailsInner booking={booking} />;
+}
+
+function BookingDetailsInner({ booking }: { booking: BookingRecord }) {
   const {
-    bookings,
+    role,
     payments,
     refunds,
     cancelBooking,
@@ -47,9 +78,7 @@ function BookingDetailsContent() {
 
   const [showCancelConfirm, setShowCancelConfirm] = useState(false);
   const [cancelReason, setCancelReason] = useState("");
-
-  const booking =
-    bookings.find((b) => b.receiptNo === params.id || b.id === params.id) || bookings[0];
+  const [cancelRequestNotice, setCancelRequestNotice] = useState<string | null>(null);
 
   const bookingPayments = useMemo(
     () => payments.filter((p) => p.bookingReceiptNo === booking.receiptNo || p.bookingId === booking.id),
@@ -202,6 +231,11 @@ function BookingDetailsContent() {
     cancelBooking(booking.id, cancelReason);
     setShowCancelConfirm(false);
     setCancelReason("");
+    if (role !== "admin") {
+      setCancelRequestNotice(
+        `Cancellation request for #${booking.receiptNo} sent to Admin for approval.`
+      );
+    }
   };
 
   return (
@@ -427,25 +461,48 @@ function BookingDetailsContent() {
           </div>
         )}
 
+        {cancelRequestNotice && (
+          <div className="bg-amber-50 border border-amber-200 rounded-2xl px-4 py-3 text-[13px] font-semibold text-amber-900">
+            {cancelRequestNotice}
+          </div>
+        )}
+
         {/* Quick Workflow Action Bar if Pending / Awaiting Approval / Confirmed */}
         {(booking.status === "Pending" ||
           booking.status === "Awaiting approval" ||
           booking.status === "Confirmed") && (
           <div className="flex flex-wrap items-center justify-between gap-3 bg-[#FFFDF7] border border-[#EFE4CC] rounded-2xl px-4 py-3 text-[13px]">
             <span className="text-[#5B6474] font-medium">
-              Quick status update for{" "}
-              <strong className="text-[#0B2A5B]">#{booking.receiptNo}</strong>:
+              {booking.status === "Pending" || booking.status === "Awaiting approval" ? (
+                role === "admin" ? (
+                  <>
+                    Admin approval needed for{" "}
+                    <strong className="text-[#0B2A5B]">#{booking.receiptNo}</strong>:
+                  </>
+                ) : (
+                  <>
+                    Booking <strong className="text-[#0B2A5B]">#{booking.receiptNo}</strong> is{" "}
+                    <strong className="text-amber-700">awaiting Admin approval</strong> before it can be confirmed.
+                  </>
+                )
+              ) : (
+                <>
+                  Quick status update for{" "}
+                  <strong className="text-[#0B2A5B]">#{booking.receiptNo}</strong>:
+                </>
+              )}
             </span>
             <div className="flex flex-wrap gap-2">
-              {(booking.status === "Pending" || booking.status === "Awaiting approval") && (
-                <button
-                  type="button"
-                  onClick={() => updateBookingStatus(booking.id, "Confirmed")}
-                  className="px-3.5 py-1.5 rounded-xl bg-[#15803D] text-white text-[12.5px] font-bold cursor-pointer"
-                >
-                  Mark Confirmed
-                </button>
-              )}
+              {(booking.status === "Pending" || booking.status === "Awaiting approval") &&
+                role === "admin" && (
+                  <button
+                    type="button"
+                    onClick={() => updateBookingStatus(booking.id, "Confirmed")}
+                    className="px-3.5 py-1.5 rounded-xl bg-[#15803D] text-white text-[12.5px] font-bold cursor-pointer"
+                  >
+                    Approve &amp; Mark Confirmed
+                  </button>
+                )}
               {booking.status === "Confirmed" && (
                 <button
                   type="button"

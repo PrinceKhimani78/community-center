@@ -1,52 +1,86 @@
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
+import { backendFetch, isBackendConfigured } from "@/lib/api/backend";
 
-// TODO: Replace mock credentials with production database authentication and password hashing (e.g., Argon2/bcrypt)
-const DEMO_USERS: Record<string, { pass: string; role: string }> = {
-  manager: { pass: "manager123", role: "manager" },
-  admin: { pass: "admin123", role: "admin" },
+const DEMO_USERS: Record<string, { pass: string; role: string; name: string }> = {
+  admin: { pass: "admin123", role: "admin", name: "Haji Valibhoy Trustee" },
+  manager: { pass: "manager123", role: "manager", name: "Centre Manager" },
+  accounts: { pass: "accounts123", role: "accountant", name: "Imtiyaz Accountant" },
+  caretaker: { pass: "staff123", role: "staff", name: "Irfanbhai Bloch" },
 };
 
 export async function POST(request: Request) {
   try {
     const body = await request.json();
     const { userId, password, keepMeSignedIn } = body;
+    const trimmedId = String(userId || "").trim().toLowerCase();
 
-    const trimmedId = (userId || "").trim().toLowerCase();
-    const user = DEMO_USERS[trimmedId];
+    let sessionRole = "manager";
+    let sessionName = trimmedId;
+    let backendToken: string | undefined;
 
-    if (!user || user.pass !== password) {
-      // Return generic failure to prevent account enumeration
-      return NextResponse.json(
-        { success: false, message: "User ID or password is incorrect." },
-        { status: 401 }
-      );
+    if (isBackendConfigured()) {
+      const result = await backendFetch<{
+        success?: boolean;
+        token?: string;
+        role?: string;
+        code?: string;
+        message?: string;
+        user?: { userId: string; name: string; role: string };
+      }>("/api/auth/login", {
+        method: "POST",
+        body: { userId: trimmedId, password, keepMeSignedIn },
+      });
+
+      if (!result.ok || !result.data.success) {
+        return NextResponse.json(
+          {
+            success: false,
+            code: result.data.code,
+            message: result.data.message || "User ID or password is incorrect.",
+          },
+          { status: result.status || 401 }
+        );
+      }
+
+      backendToken = result.data.token;
+      sessionRole = (result.data.role || result.data.user?.role || "manager").toLowerCase();
+      sessionName = result.data.user?.name || trimmedId;
+    } else {
+      const user = DEMO_USERS[trimmedId];
+      if (!user || user.pass !== password) {
+        return NextResponse.json(
+          { success: false, message: "User ID or password is incorrect." },
+          { status: 401 }
+        );
+      }
+      sessionRole = user.role;
+      sessionName = user.name;
     }
 
-    // Set httpOnly session cookie
     const cookieStore = await cookies();
     const sessionData = JSON.stringify({
+      token: backendToken,
       userId: trimmedId,
-      role: user.role,
+      name: sessionName,
+      role: sessionRole,
       authenticatedAt: new Date().toISOString(),
     });
 
-    const cookieOptions = {
+    cookieStore.set({
       name: "valibhoy_session",
       value: sessionData,
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
-      sameSite: "lax" as const,
+      sameSite: "lax",
       path: "/",
-      // Longer expiry (30 days) if "Keep me signed in" is checked, else 1 day / session
       maxAge: keepMeSignedIn ? 30 * 24 * 60 * 60 : 24 * 60 * 60,
-    };
-
-    cookieStore.set(cookieOptions);
+    });
 
     return NextResponse.json({
       success: true,
-      role: user.role,
+      role: sessionRole,
+      name: sessionName,
       message: "Login successful",
     });
   } catch (error) {
