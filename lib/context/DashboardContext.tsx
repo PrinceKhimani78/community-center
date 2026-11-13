@@ -18,6 +18,7 @@ import {
   BASE_RENT_PER_FLOOR,
   AC_SURCHARGE_PER_FLOOR,
   DEFAULT_SECURITY_DEPOSIT,
+  getTodayISO,
 } from "@/lib/utils/bookings";
 import {
   ActionItem,
@@ -32,6 +33,7 @@ import {
   INITIAL_ACTION_ITEMS,
   INITIAL_APPLICANTS,
   INITIAL_APPROVALS,
+  INITIAL_ATTENDANCE_LOGS,
   INITIAL_AUDIT_LOGS,
   INITIAL_BOOKINGS,
   INITIAL_DEPOSIT_REFUNDS,
@@ -48,6 +50,7 @@ import {
   PaymentMode,
   PaymentRecord,
   RolePermissionItem,
+  StaffAttendanceLogEntry,
   StaffAttendanceRecord,
   SystemUser,
 } from "@/lib/mock/dashboard";
@@ -132,6 +135,7 @@ interface DashboardContextType {
   setHallCheckMode: (mode: "Before Event" | "After Event") => void;
   hallCheckItems: HallCheckItem[];
   staffAttendance: StaffAttendanceRecord[];
+  staffAttendanceLogs: StaffAttendanceLogEntry[];
   myAttendance: MyAttendanceState;
   approvals: ApprovalItem[];
   notifications: NotificationRecord[];
@@ -178,7 +182,7 @@ interface DashboardContextType {
     bookingReceiptNo: string,
     mode: "Before Event" | "After Event"
   ) => void;
-  toggleMyCheckIn: (geo?: GeoCheckPayload) => void;
+  toggleMyCheckIn: (geo?: GeoCheckPayload, overrideReason?: string) => Promise<void>;
   addAdminAlert: (input: AdminAlertInput) => void;
   decideApproval: (approvalId: string, decision: "Approved" | "Rejected") => void;
   markAllNotificationsRead: () => void;
@@ -363,7 +367,8 @@ export function DashboardProvider({
   const [tickets, setTickets] = useState<MaintenanceTicket[]>(INITIAL_MAINTENANCE_TICKETS);
   const [hallCheckMode, setHallCheckMode] = useState<"Before Event" | "After Event">("After Event");
   const [hallCheckItems, setHallCheckItems] = useState<HallCheckItem[]>(INITIAL_HALL_CHECK_ITEMS);
-  const [staffAttendance] = useState<StaffAttendanceRecord[]>(INITIAL_STAFF_ATTENDANCE);
+  const [staffAttendance, setStaffAttendance] = useState<StaffAttendanceRecord[]>(INITIAL_STAFF_ATTENDANCE);
+  const [staffAttendanceLogs, setStaffAttendanceLogs] = useState<StaffAttendanceLogEntry[]>(INITIAL_ATTENDANCE_LOGS);
   const myAttendance = useSyncExternalStore(
     myAttendanceStore.subscribe,
     myAttendanceStore.getSnapshot,
@@ -412,6 +417,12 @@ export function DashboardProvider({
       if (Array.isArray(d.maintenanceTickets)) setTickets(d.maintenanceTickets);
       if (Array.isArray(d.hallCheckItems) && d.hallCheckItems.length > 0) {
         setHallCheckItems(d.hallCheckItems);
+      }
+      if (Array.isArray(d.staffAttendance) && d.staffAttendance.length > 0) {
+        setStaffAttendance(d.staffAttendance);
+      }
+      if (Array.isArray(d.staffAttendanceLogs) && d.staffAttendanceLogs.length > 0) {
+        setStaffAttendanceLogs(d.staffAttendanceLogs);
       }
       if (Array.isArray(d.approvals)) setApprovals(d.approvals);
       if (Array.isArray(d.actionItems)) setActionItems(d.actionItems);
@@ -1077,10 +1088,12 @@ export function DashboardProvider({
   );
 
   const toggleMyCheckIn = useCallback(
-    (geo?: GeoCheckPayload) => {
+    async (geo?: GeoCheckPayload, overrideReason?: string) => {
       const now = getCurrentTimeLabel();
-      const actor = role === "admin" ? "Admin" : "Manager";
+      const userObj = users.find((u) => u.userId === userId);
+      const actor = userObj?.name || (role === "admin" ? "Trustee / Admin" : "Centre Manager");
       const checkingIn = !myAttendance.checkedIn;
+      const todayISO = getTodayISO();
 
       myAttendanceStore.set((prev) => {
         if (!prev.checkedIn) {
@@ -1105,6 +1118,67 @@ export function DashboardProvider({
         };
       });
 
+      // Update staffAttendance roster immediately in UI
+      setStaffAttendance((prev) => {
+        const idx = prev.findIndex(
+          (s) => s.name.toLowerCase() === actor.toLowerCase() || s.id === `st-${userId}`
+        );
+        if (idx >= 0) {
+          const updated = [...prev];
+          updated[idx] = {
+            ...updated[idx],
+            checkInTime: checkingIn ? now : updated[idx].checkInTime,
+            checkOutTime: checkingIn ? "—" : now,
+            geoVerified: geo?.withinFence ?? updated[idx].geoVerified,
+            status: "Present",
+          };
+          return updated;
+        }
+        return [
+          {
+            id: `st-${userId || Date.now()}`,
+            name: actor,
+            roleTitle: role === "admin" ? "Trustee / Admin" : "Centre Manager",
+            checkInTime: checkingIn ? now : "—",
+            checkOutTime: checkingIn ? "—" : now,
+            geoVerified: geo?.withinFence ?? false,
+            status: "Present",
+            presentDays: 1,
+            lateDays: 0,
+            absentDays: 0,
+          },
+          ...prev,
+        ];
+      });
+
+      // Prepend to staffAttendanceLogs immediately so Admin calendar/logs table displays it
+      if (checkingIn) {
+        setStaffAttendanceLogs((prev) => [
+          {
+            id: `attlog-${Date.now()}`,
+            staffId: `st-${userId}`,
+            dateISO: todayISO,
+            name: actor,
+            roleTitle: role === "admin" ? "Trustee / Admin" : "Centre Manager",
+            checkInTime: now,
+            checkOutTime: "—",
+            geoVerified: geo?.withinFence ?? false,
+            status: "Present",
+          },
+          ...prev,
+        ]);
+      } else {
+        setStaffAttendanceLogs((prev) =>
+          prev.map((log) =>
+            log.name.toLowerCase() === actor.toLowerCase() &&
+            log.dateISO === todayISO &&
+            log.checkOutTime === "—"
+              ? { ...log, checkOutTime: now }
+              : log
+          )
+        );
+      }
+
       const distLabel =
         geo && typeof geo.distanceMeters === "number"
           ? `${formatDistanceMeters(geo.distanceMeters)} from centre`
@@ -1121,8 +1195,28 @@ export function DashboardProvider({
         href: "/attendance",
         auditAction: `Geo-verified ${checkingIn ? "check-in" : "check-out"}`,
       });
+
+      // Synchronize with backend API
+      try {
+        const endpoint = checkingIn ? "/api/attendance/check-in" : "/api/attendance/check-out";
+        const res = await fetch(endpoint, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            latitude: geo?.latitude,
+            longitude: geo?.longitude,
+            dateISO: todayISO,
+            overrideReason,
+          }),
+        });
+        if (res.ok) {
+          void refreshBootstrap();
+        }
+      } catch (err) {
+        console.error("Attendance API sync error:", err);
+      }
     },
-    [myAttendance.checkedIn, role, addAdminAlert]
+    [myAttendance.checkedIn, role, userId, users, addAdminAlert, refreshBootstrap]
   );
 
   const decideApproval = useCallback(
@@ -1411,6 +1505,7 @@ export function DashboardProvider({
         setHallCheckMode,
         hallCheckItems,
         staffAttendance,
+        staffAttendanceLogs,
         myAttendance,
         approvals,
         notifications,

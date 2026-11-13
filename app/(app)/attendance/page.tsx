@@ -21,7 +21,7 @@ import { useDashboard } from "@/lib/context/DashboardContext";
 import { INITIAL_ATTENDANCE_LOGS, type StaffAttendanceLogEntry } from "@/lib/mock/dashboard";
 import PageShell from "@/components/common/PageShell";
 import StatusBadge from "@/components/common/StatusBadge";
-import { REFERENCE_TODAY_ISO, formatShortDate } from "@/lib/utils/bookings";
+import { formatShortDate, getTodayISO } from "@/lib/utils/bookings";
 import {
   CENTRE_COORDINATES,
   GEOFENCE_RADIUS_METERS,
@@ -147,6 +147,7 @@ export default function AttendancePage() {
     myAttendance,
     toggleMyCheckIn,
     staffAttendance,
+    staffAttendanceLogs,
     notifications,
     addAdminAlert,
     systemSettings,
@@ -156,6 +157,9 @@ export default function AttendancePage() {
   const targetLat = systemSettings.geofenceLatitude;
   const targetLon = systemSettings.geofenceLongitude;
   const radiusMeters = systemSettings.geofenceRadiusMeters;
+
+  const todayISO = getTodayISO();
+  const currentMonth = todayISO.slice(0, 7);
 
   const [clockText, setClockText] = useState("01:38 PM");
   const [adminTab, setAdminTab] = useState<AdminViewTab>("register");
@@ -173,10 +177,10 @@ export default function AttendancePage() {
 
   // Admin calendar & search filters
   const [filterMode, setFilterMode] = useState<AttendanceFilterMode>("date");
-  const [selectedDate, setSelectedDate] = useState(REFERENCE_TODAY_ISO);
-  const [selectedMonth, setSelectedMonth] = useState("2026-10");
-  const [fromDate, setFromDate] = useState("2026-10-01");
-  const [toDate, setToDate] = useState(REFERENCE_TODAY_ISO);
+  const [selectedDate, setSelectedDate] = useState(todayISO);
+  const [selectedMonth, setSelectedMonth] = useState(currentMonth);
+  const [fromDate, setFromDate] = useState(todayISO);
+  const [toDate, setToDate] = useState(todayISO);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("All");
   const [searchQuery, setSearchQuery] = useState("");
 
@@ -308,20 +312,15 @@ export default function AttendancePage() {
 
   // Merge live context updates on today's date with the October log dataset
   const allAttendanceLogs = useMemo<StaffAttendanceLogEntry[]>(() => {
-    const todayById = new Map(staffAttendance.map((s) => [s.id, s]));
-    return INITIAL_ATTENDANCE_LOGS.map((entry) => {
-      if (entry.dateISO !== REFERENCE_TODAY_ISO) return entry;
-      const live = todayById.get(entry.staffId);
-      if (!live) return entry;
-      return {
-        ...entry,
-        checkInTime: live.checkInTime,
-        checkOutTime: live.checkOutTime,
-        geoVerified: live.geoVerified,
-        status: live.status,
-      };
-    });
-  }, [staffAttendance]);
+    const combined = [...staffAttendanceLogs];
+    const seenIds = new Set(combined.map((c) => c.id));
+    for (const init of INITIAL_ATTENDANCE_LOGS) {
+      if (!seenIds.has(init.id)) {
+        combined.push(init);
+      }
+    }
+    return combined;
+  }, [staffAttendanceLogs]);
 
   // Date/Calendar + Search filtered logs for Admin
   const calendarFilteredLogs = useMemo(() => {
