@@ -3,7 +3,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Calendar as CalendarIcon, ChevronLeft, ChevronRight } from "lucide-react";
 import type { BookingRecord, HallName, MaintenanceTicket } from "@/lib/mock/dashboard";
-import { formatShortDate, getHallDateConflict } from "@/lib/utils/bookings";
+import { formatShortDate, getHallDateConflict, getTodayISO } from "@/lib/utils/bookings";
 
 interface BookingDatePickerProps {
   value: string;
@@ -14,6 +14,7 @@ interface BookingDatePickerProps {
   excludeBookingId?: string;
   minDateISO?: string;
   rangeStartISO?: string;
+  disablePastDates?: boolean;
   ariaLabel?: string;
 }
 
@@ -36,13 +37,15 @@ export default function BookingDatePicker({
   excludeBookingId,
   minDateISO,
   rangeStartISO,
+  disablePastDates = true,
   ariaLabel = "Select date",
 }: BookingDatePickerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
-  const initialDate = value ? new Date(`${value}T00:00:00`) : new Date(2026, 9, 20);
+  const initialDate = value ? new Date(`${value}T00:00:00`) : new Date();
   const [isOpen, setIsOpen] = useState(false);
   const [cursorYear, setCursorYear] = useState(initialDate.getFullYear());
   const [cursorMonth, setCursorMonth] = useState(initialDate.getMonth());
+  const todayISO = getTodayISO();
 
   useEffect(() => {
     if (!isOpen) return;
@@ -73,26 +76,35 @@ export default function BookingDatePicker({
     return cells;
   }, [cursorYear, cursorMonth]);
 
-  const checkDateDisabled = (iso: string): { disabled: boolean; title?: string; isBooked: boolean } => {
-    if (minDateISO && iso < minDateISO) {
-      return { disabled: true, title: `Before ${formatShortDate(minDateISO)}`, isBooked: false };
+  const checkDateDisabled = (
+    iso: string
+  ): { disabled: boolean; title?: string; isBooked: boolean; isPast: boolean } => {
+    const effectiveMin = minDateISO || (disablePastDates ? todayISO : undefined);
+    if (effectiveMin && iso < effectiveMin) {
+      const isPast = iso < todayISO;
+      return {
+        disabled: true,
+        title: isPast ? "Past dates cannot be booked" : `Before ${formatShortDate(effectiveMin)}`,
+        isBooked: false,
+        isPast,
+      };
     }
     if (rangeStartISO && iso >= rangeStartISO) {
       let cur = rangeStartISO;
       while (cur <= iso) {
         const res = getHallDateConflict(cur, hall, bookings, tickets, excludeBookingId);
         if (!res.available) {
-          return { disabled: true, title: res.reason, isBooked: true };
+          return { disabled: true, title: res.reason, isBooked: true, isPast: false };
         }
         cur = addDays(cur, 1);
       }
-      return { disabled: false, isBooked: false };
+      return { disabled: false, isBooked: false, isPast: false };
     }
     const status = getHallDateConflict(iso, hall, bookings, tickets, excludeBookingId);
     if (!status.available) {
-      return { disabled: true, title: status.reason, isBooked: true };
+      return { disabled: true, title: status.reason, isBooked: true, isPast: false };
     }
-    return { disabled: false, isBooked: false };
+    return { disabled: false, isBooked: false, isPast: false };
   };
 
   const shiftMonth = (delta: number) => {
@@ -104,6 +116,10 @@ export default function BookingDatePicker({
   const handleToggleOpen = () => {
     if (!isOpen && value) {
       const d = new Date(`${value}T00:00:00`);
+      setCursorYear(d.getFullYear());
+      setCursorMonth(d.getMonth());
+    } else if (!isOpen) {
+      const d = new Date();
       setCursorYear(d.getFullYear());
       setCursorMonth(d.getMonth());
     }
@@ -158,8 +174,9 @@ export default function BookingDatePicker({
               if (!cell) {
                 return <div key={`empty-${idx}`} className="h-9" />;
               }
-              const { disabled, title, isBooked } = checkDateDisabled(cell.iso);
+              const { disabled, title, isBooked, isPast } = checkDateDisabled(cell.iso);
               const isSelected = value === cell.iso;
+              const isToday = cell.iso === todayISO;
 
               return (
                 <button
@@ -175,9 +192,13 @@ export default function BookingDatePicker({
                     disabled
                       ? isBooked
                         ? "bg-slate-200/80 text-slate-400 line-through cursor-not-allowed"
+                        : isPast
+                        ? "bg-slate-100 text-slate-300 line-through cursor-not-allowed"
                         : "bg-slate-100 text-slate-300 cursor-not-allowed"
                       : isSelected
                       ? "bg-[#0B2A5B] text-white shadow-xs cursor-pointer"
+                      : isToday
+                      ? "bg-[#FFFDF2] text-[#C9971C] border border-[#E2B544] hover:bg-[#FAF5EB] cursor-pointer"
                       : "bg-white text-[#0B2A5B] border border-[#EFE4CC] hover:border-[#E2B544] hover:bg-[#FAF5EB] cursor-pointer"
                   }`}
                 >
@@ -190,7 +211,7 @@ export default function BookingDatePicker({
           <div className="flex items-center justify-between pt-2 border-t border-[#F1ECE1] text-[11px] text-[#5B6474]">
             <span className="inline-flex items-center gap-1.5">
               <span className="w-3 h-3 rounded bg-slate-200 inline-block" />
-              Greyed = Booked / Unavailable
+              Greyed = Booked / Past
             </span>
             <span className="inline-flex items-center gap-1.5">
               <span className="w-3 h-3 rounded bg-[#0B2A5B] inline-block" />
@@ -202,4 +223,3 @@ export default function BookingDatePicker({
     </div>
   );
 }
-

@@ -26,7 +26,9 @@ import {
   formatShortDate,
   getFloorCount,
   getHallDateConflict,
+  getTodayISO,
   hallsConflict,
+  isDateInPast,
   isDateInRange,
 } from "@/lib/utils/bookings";
 
@@ -137,17 +139,19 @@ export default function NewBookingForm({
   const [isAC, setIsAC] = useState(editBooking ? editBooking.isAC : true);
   const [guests, setGuests] = useState(editBooking?.guests ?? 250);
 
+  const todayISO = getTodayISO();
+
   const defaultStartISO = (() => {
     if (editBooking?.dateISO) return editBooking.dateISO;
-    if (initialDateISO) return initialDateISO;
-    let candidate = "2026-10-30";
+    if (initialDateISO && initialDateISO >= todayISO) return initialDateISO;
+    let candidate = todayISO;
     for (let i = 0; i < 60; i++) {
       if (getHallDateConflict(candidate, defaultHall, bookings, tickets).available) {
         return candidate;
       }
       candidate = addOneDayISO(candidate);
     }
-    return "2026-10-30";
+    return todayISO;
   })();
   const [dateISO, setDateISO] = useState(defaultStartISO);
   const [isMultiDay, setIsMultiDay] = useState(
@@ -278,6 +282,10 @@ export default function NewBookingForm({
 
     if (!dateISO) {
       setFormError("Please select a start date.");
+      return;
+    }
+    if (!isEdit && isDateInPast(dateISO)) {
+      setFormError("Bookings cannot be scheduled for past dates. Please choose today or a future date.");
       return;
     }
     if (isMultiDay && endDateISO < dateISO) {
@@ -675,6 +683,8 @@ export default function NewBookingForm({
                 bookings={bookings}
                 tickets={tickets}
                 excludeBookingId={editBooking?.id}
+                minDateISO={isEdit ? undefined : todayISO}
+                disablePastDates={!isEdit}
                 ariaLabel="Start Date"
               />
             </div>
@@ -691,8 +701,9 @@ export default function NewBookingForm({
                   bookings={bookings}
                   tickets={tickets}
                   excludeBookingId={editBooking?.id}
-                  minDateISO={dateISO}
+                  minDateISO={dateISO || todayISO}
                   rangeStartISO={dateISO}
+                  disablePastDates={!isEdit}
                   ariaLabel="End Date"
                 />
               </div>

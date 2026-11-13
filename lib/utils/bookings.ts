@@ -51,7 +51,21 @@ export const TIMING_PRESETS = [
   "4:00 PM – 8:00 PM",
 ] as const;
 
-export const REFERENCE_TODAY_ISO = "2026-10-20";
+/** Returns today's date formatted as YYYY-MM-DD in local time. */
+export function getTodayISO(): string {
+  const d = new Date();
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+export const REFERENCE_TODAY_ISO = getTodayISO();
+
+/** Returns true if the provided YYYY-MM-DD is strictly before today's date. */
+export function isDateInPast(iso: string): boolean {
+  return Boolean(iso && iso < getTodayISO());
+}
 
 const MONTH_INDEX: Record<string, string> = {
   jan: "01",

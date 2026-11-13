@@ -17,12 +17,13 @@ import PageShell from "@/components/common/PageShell";
 import StatusBadge from "@/components/common/StatusBadge";
 import {
   HALL_OPTIONS,
-  REFERENCE_TODAY_ISO,
   STATUS_VISUALS,
   formatFullWeekdayDate,
   getMultiDayIndex,
+  getTodayISO,
   hallsConflict,
   isDateFullyBooked,
+  isDateInPast,
   isDateInRange,
 } from "@/lib/utils/bookings";
 
@@ -46,17 +47,19 @@ function getWeekDates(anchorISO: string): string[] {
 
 export default function CalendarPage() {
   const { bookings, tickets, addMaintenanceTicket } = useDashboard();
+  const today = useMemo(() => new Date(), []);
+  const todayISO = getTodayISO();
 
   const [view, setView] = useState<CalendarView>("month");
-  const [cursorYear, setCursorYear] = useState(2026);
-  const [cursorMonth, setCursorMonth] = useState(9); // 0-indexed: 9 = October
-  const [selectedDateISO, setSelectedDateISO] = useState(REFERENCE_TODAY_ISO);
+  const [cursorYear, setCursorYear] = useState(today.getFullYear());
+  const [cursorMonth, setCursorMonth] = useState(today.getMonth());
+  const [selectedDateISO, setSelectedDateISO] = useState(todayISO);
   const [hallFilter, setHallFilter] = useState<string>("All");
 
   // Maintenance block panel state
   const [showBlockForm, setShowBlockForm] = useState(false);
   const [blockLocation, setBlockLocation] = useState<string>("Ground Floor");
-  const [blockDateISO, setBlockDateISO] = useState<string>("2026-10-26");
+  const [blockDateISO, setBlockDateISO] = useState<string>(todayISO);
   const [blockReason, setBlockReason] = useState("");
   const [blockSavedMsg, setBlockSavedMsg] = useState<string | null>(null);
 
@@ -100,6 +103,7 @@ export default function CalendarPage() {
     tickets,
     hallFilter
   );
+  const selectedDateInPast = isDateInPast(selectedDateISO);
 
   const blockClashBooking = useMemo(() => {
     return bookings.find(
@@ -118,9 +122,10 @@ export default function CalendarPage() {
   };
 
   const jumpToToday = () => {
-    setCursorYear(2026);
-    setCursorMonth(9);
-    setSelectedDateISO(REFERENCE_TODAY_ISO);
+    const now = new Date();
+    setCursorYear(now.getFullYear());
+    setCursorMonth(now.getMonth());
+    setSelectedDateISO(getTodayISO());
   };
 
   const handleSaveBlock = (e: React.FormEvent) => {
@@ -302,7 +307,17 @@ export default function CalendarPage() {
                 <span>Block for Maintenance</span>
               </button>
 
-              {selectedDateBookedOut ? (
+              {selectedDateInPast ? (
+                <button
+                  type="button"
+                  disabled
+                  style={{ minHeight: "42px" }}
+                  className="px-4 py-2 rounded-[10px] bg-slate-200 text-slate-400 text-[13px] font-bold inline-flex items-center gap-1.5 cursor-not-allowed"
+                  title="Past dates cannot be reserved"
+                >
+                  <span>Past Date</span>
+                </button>
+              ) : selectedDateBookedOut ? (
                 <button
                   type="button"
                   disabled
@@ -459,7 +474,8 @@ export default function CalendarPage() {
                     }
                     const { dayBookings, dayBlocks } = getEventsForDate(cell.iso);
                     const isSelected = selectedDateISO === cell.iso;
-                    const isToday = cell.iso === REFERENCE_TODAY_ISO;
+                    const isToday = cell.iso === todayISO;
+                    const isPast = isDateInPast(cell.iso);
                     const cellBookedOut = isDateFullyBooked(
                       cell.iso,
                       bookings,
@@ -507,11 +523,15 @@ export default function CalendarPage() {
                             ? "#EFF6FF"
                             : isToday
                             ? "#FFFDF2"
+                            : isPast
+                            ? "#F8FAFC"
                             : "#FFFFFF",
                         }}
                         className={`h-24 rounded-xl p-1.5 flex flex-col justify-between text-left transition-all overflow-hidden ${
                           cellBookedOut
                             ? "opacity-80 cursor-not-allowed"
+                            : isPast
+                            ? "opacity-75 cursor-pointer hover:border-[#CBD5E1]"
                             : "cursor-pointer hover:border-[#E2B544]"
                         }`}
                       >
@@ -522,6 +542,8 @@ export default function CalendarPage() {
                                 ? "text-slate-500 line-through"
                                 : isToday
                                 ? "text-[#C9971C]"
+                                : isPast
+                                ? "text-slate-400"
                                 : "text-[#0B2A5B]"
                             }`}
                           >
@@ -789,7 +811,7 @@ export default function CalendarPage() {
           <aside className="lg:col-span-4 space-y-3">
             <div className="flex items-center justify-between gap-2 px-1">
               <h2 style={{ color: "#0B2A5B", fontSize: "16.5px", fontWeight: 700 }}>
-                {selectedDateISO === REFERENCE_TODAY_ISO
+                {selectedDateISO === todayISO
                   ? `Today · ${formatFullWeekdayDate(selectedDateISO)}`
                   : formatFullWeekdayDate(selectedDateISO)}
               </h2>
@@ -797,7 +819,11 @@ export default function CalendarPage() {
                 <span className="text-[12px] font-semibold text-[#5B6474]">
                   {selectedTotalCount} {selectedTotalCount === 1 ? "item" : "items"}
                 </span>
-                {selectedDateBookedOut ? (
+                {selectedDateInPast ? (
+                  <span className="md:hidden text-[11.5px] font-bold text-slate-400">
+                    Past
+                  </span>
+                ) : selectedDateBookedOut ? (
                   <span className="md:hidden text-[11.5px] font-bold text-slate-500">
                     Booked
                   </span>

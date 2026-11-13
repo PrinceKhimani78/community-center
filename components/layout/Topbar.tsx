@@ -39,6 +39,17 @@ const ROUTE_TITLES: Array<{ prefix: string; title: string; subtitle: string }> =
   { prefix: "/help", title: "Help & Guide", subtitle: "Simple step-by-step guide" },
 ];
 
+const emptySubscribe = () => () => {};
+
+function getClientTodayLabel(): string {
+  return new Date().toLocaleDateString("en-GB", {
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  });
+}
+
 export default function Topbar({ title }: TopbarProps) {
   const pathname = usePathname();
   const { role, actionCount, unreadAlertCount } = useDashboard();
@@ -53,6 +64,12 @@ export default function Topbar({ title }: TopbarProps) {
   const userInitials = isManager ? "MG" : "AD";
   const userName = isManager ? "Manager" : "Admin";
   const userRoleTitle = isManager ? "Centre Manager" : "Trustee / Admin";
+
+  const currentDateLabel = React.useSyncExternalStore(
+    emptySubscribe,
+    getClientTodayLabel,
+    () => "Today"
+  );
 
   return (
     <>
@@ -105,7 +122,7 @@ export default function Topbar({ title }: TopbarProps) {
             className="flex items-center gap-1.5 shrink-0 shadow-2xs"
           >
             <Calendar className="w-3.5 h-3.5 text-[#C9971C]" />
-            <span>Tue, 20 Oct 2026</span>
+            <span>{currentDateLabel || "Today"}</span>
           </div>
 
           <Link
