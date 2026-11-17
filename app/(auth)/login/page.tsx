@@ -1,6 +1,8 @@
 import React from "react";
 import type { Metadata } from "next";
 import Image from "next/image";
+import { cookies } from "next/headers";
+import { redirect } from "next/navigation";
 import LoginForm from "@/components/auth/LoginForm";
 import LanguageSwitcher from "@/components/common/LanguageSwitcher";
 
@@ -9,7 +11,15 @@ export const metadata: Metadata = {
   description: "Community Centre Management System - Dhari, Gujarat, India",
 };
 
-export default function LoginPage() {
+export const instant = false;
+
+export default async function LoginPage() {
+  const cookieStore = await cookies();
+  const session = cookieStore.get("valibhoy_session");
+  if (session?.value) {
+    redirect("/dashboard");
+  }
+
   return (
     <div
       style={{ backgroundColor: "#FAF5EB" }}

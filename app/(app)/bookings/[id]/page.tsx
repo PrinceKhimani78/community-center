@@ -39,10 +39,47 @@ interface TimelineStep {
 function BookingDetailsContent() {
   const params = useParams<{ id: string }>();
   const { bookings } = useDashboard();
+  const [fetchedBooking, setFetchedBooking] = useState<BookingRecord | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [fetchAttempted, setFetchAttempted] = useState(false);
 
-  const booking = bookings.find(
-    (b) => b.receiptNo === params.id || b.id === params.id
-  );
+  const booking = useMemo(() => {
+    return (
+      bookings.find((b) => b.receiptNo === params.id || b.id === params.id) ||
+      fetchedBooking
+    );
+  }, [bookings, params.id, fetchedBooking]);
+
+  React.useEffect(() => {
+    if (!booking && params.id && !fetchAttempted) {
+      setLoading(true);
+      fetch(`/api/bookings/${encodeURIComponent(params.id)}`)
+        .then((res) => (res.ok ? res.json() : null))
+        .then((data) => {
+          if (data?.booking) {
+            setFetchedBooking(data.booking);
+          }
+        })
+        .catch(() => {})
+        .finally(() => {
+          setLoading(false);
+          setFetchAttempted(true);
+        });
+    }
+  }, [booking, params.id, fetchAttempted]);
+
+  if (loading && !booking) {
+    return (
+      <PageShell hideHeader>
+        <div className="bg-white rounded-2xl border border-[#EFE4CC] p-12 text-center space-y-3">
+          <div className="w-8 h-8 border-3 border-[#0B2A5B] border-t-transparent rounded-full animate-spin mx-auto" />
+          <p className="text-[14px] font-semibold text-[#0B2A5B]">
+            Loading booking #{params.id}...
+          </p>
+        </div>
+      </PageShell>
+    );
+  }
 
   if (!booking) {
     return (
@@ -50,7 +87,7 @@ function BookingDetailsContent() {
         <div className="bg-white rounded-2xl border border-[#EFE4CC] p-8 text-center space-y-3">
           <h1 className="text-[18px] font-bold text-[#0B2A5B]">Booking not found</h1>
           <p className="text-[13px] text-[#5B6474]">
-            Booking #{params.id} could not be found or is still loading.
+            Booking #{params.id} could not be found.
           </p>
           <Link
             href="/bookings"

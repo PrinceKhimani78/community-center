@@ -823,7 +823,7 @@ export function DashboardProvider({
       mode: PaymentMode;
       reference: string;
     }) => {
-      const target = bookings.find((b) => b.id === input.bookingId);
+      const target = bookings.find((b) => b.id === input.bookingId || b.receiptNo === input.bookingId);
       if (!target || input.amount <= 0) return null;
 
       const nextReceiptNo = `REC-2026-${1060 + payments.length}`;
@@ -838,13 +838,13 @@ export function DashboardProvider({
         amount: input.amount,
         mode: input.mode,
         reference: input.reference || `${input.mode.toUpperCase()}-${target.receiptNo}`,
-        dateLabel: "20 Oct 2026",
+        dateLabel: new Date().toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }),
       };
 
       setPayments((prev) => [newPay, ...prev]);
       setBookings((prev) =>
         prev.map((b) => {
-          if (b.id !== target.id) return b;
+          if (b.id !== target.id && b.receiptNo !== target.receiptNo) return b;
           const updatedPaid = b.paid + input.amount;
           return {
             ...b,
@@ -858,9 +858,27 @@ export function DashboardProvider({
         `Collected ₹${input.amount.toLocaleString("en-IN")} (${input.mode})`,
         `Receipt ${nextReceiptNo} for ${target.applicantName}`
       );
+
+      fetch("/api/payments", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          bookingId: target.id,
+          type: input.type,
+          amount: input.amount,
+          mode: input.mode,
+          reference: newPay.reference,
+          dateLabel: newPay.dateLabel,
+        }),
+      })
+        .then((res) => {
+          if (res.ok) refreshBootstrap();
+        })
+        .catch(() => {});
+
       return newPay;
     },
-    [bookings, payments.length, appendLog]
+    [bookings, payments.length, appendLog, refreshBootstrap]
   );
 
   const addExpense = useCallback(
@@ -868,26 +886,43 @@ export function DashboardProvider({
       const created: ExpenseRecord = {
         ...input,
         id: `exp-${Date.now()}`,
-        dateLabel: "20 Oct 2026",
+        dateLabel: new Date().toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }),
         status: role === "admin" ? "Approved" : "Pending",
       };
       setExpenses((prev) => [created, ...prev]);
       appendLog("Payment", `Added expense ₹${created.amount.toLocaleString("en-IN")}`, created.title);
+
+      fetch("/api/expenses", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: input.title,
+          category: input.category,
+          amount: input.amount,
+          paidTo: input.paidTo,
+          dateLabel: created.dateLabel,
+        }),
+      })
+        .then((res) => {
+          if (res.ok) refreshBootstrap();
+        })
+        .catch(() => {});
     },
-    [role, appendLog]
+    [role, appendLog, refreshBootstrap]
   );
 
   const processRefund = useCallback(
     (refundId: string, deductionAmount = 0, note = "") => {
+      const nextStatus = role === "admin" ? "Refunded" : "Sent for Approval";
       setRefunds((prev) =>
         prev.map((r) =>
-          r.id === refundId
+          r.id === refundId || r.bookingReceiptNo === refundId
             ? {
-              ...r,
-              deductionAmount,
-              deductionNote: note || r.deductionNote,
-              status: role === "admin" ? "Refunded" : "Sent for Approval",
-            }
+                ...r,
+                deductionAmount,
+                deductionNote: note || r.deductionNote,
+                status: nextStatus,
+              }
             : r
         )
       );
@@ -896,14 +931,28 @@ export function DashboardProvider({
         role === "admin" ? "Refunded security deposit" : "Sent deposit refund for approval",
         `Refund ID ${refundId}`
       );
+
+      fetch(`/api/deposit-refunds/${encodeURIComponent(refundId)}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          deductionAmount,
+          deductionNote: note,
+          status: nextStatus,
+        }),
+      })
+        .then((res) => {
+          if (res.ok) refreshBootstrap();
+        })
+        .catch(() => {});
     },
-    [role, appendLog]
+    [role, appendLog, refreshBootstrap]
   );
 
   const updateDepositRefund = useCallback(
     (refundId: string, updates: Partial<Omit<DepositRefundRecord, "id">>) => {
       setRefunds((prev) =>
-        prev.map((r) => (r.id === refundId ? { ...r, ...updates } : r))
+        prev.map((r) => (r.id === refundId || r.bookingReceiptNo === refundId ? { ...r, ...updates } : r))
       );
       if (updates.status) {
         appendLog(
@@ -912,8 +961,18 @@ export function DashboardProvider({
           `Refund ID ${refundId}`
         );
       }
+
+      fetch(`/api/deposit-refunds/${encodeURIComponent(refundId)}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(updates),
+      })
+        .then((res) => {
+          if (res.ok) refreshBootstrap();
+        })
+        .catch(() => {});
     },
-    [appendLog]
+    [appendLog, refreshBootstrap]
   );
 
   const sendPaymentReminders = useCallback(

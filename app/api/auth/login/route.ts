@@ -67,14 +67,18 @@ export async function POST(request: Request) {
       authenticatedAt: new Date().toISOString(),
     });
 
+    const isHttps =
+      request.url.startsWith("https://") ||
+      request.headers.get("x-forwarded-proto") === "https";
+
     cookieStore.set({
       name: "valibhoy_session",
       value: sessionData,
       httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
+      secure: isHttps,
       sameSite: "lax",
       path: "/",
-      maxAge: keepMeSignedIn ? 30 * 24 * 60 * 60 : 24 * 60 * 60,
+      maxAge: keepMeSignedIn ? 30 * 24 * 60 * 60 : 7 * 24 * 60 * 60,
     });
 
     return NextResponse.json({
