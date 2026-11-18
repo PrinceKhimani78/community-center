@@ -40,7 +40,7 @@ const MAIN_NAV_ITEMS: NavItem[] = [
   { label: "Deposit Refunds", href: "/deposits/1045", icon: RotateCcw },
   { label: "Invoices & Receipts", href: "/invoices/1048", icon: Receipt },
   { label: "Maintenance", href: "/maintenance", icon: Wrench },
-  { label: "Inspections", href: "/inspections/1048", icon: ClipboardCheck },
+  { label: "Inspections", href: "/inspections", icon: ClipboardCheck },
   { label: "Attendance", href: "/attendance", icon: UserCheck },
 ];
 

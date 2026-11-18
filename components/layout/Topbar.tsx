@@ -27,7 +27,7 @@ const ROUTE_TITLES: Array<{ prefix: string; title: string; subtitle: string }> =
   { prefix: "/receipts", title: "Invoices & Receipts", subtitle: "View & print receipts" },
   { prefix: "/maintenance/new", title: "New Maintenance Request", subtitle: "Tickets, quotes & calendar block" },
   { prefix: "/maintenance", title: "Maintenance Requests", subtitle: "Tickets, quotations & approvals" },
-  { prefix: "/inspections/", title: "Property Inspection", subtitle: "Before & after hall checklist" },
+  { prefix: "/inspections", title: "Property Inspection", subtitle: "Before & after hall checklist" },
   { prefix: "/attendance", title: "Attendance", subtitle: "GPS check-in & check-out" },
   { prefix: "/applicants", title: "Booking Applicants", subtitle: "Customer details & dues" },
   { prefix: "/settings", title: "Admin Settings", subtitle: "Approvals, reports & users" },

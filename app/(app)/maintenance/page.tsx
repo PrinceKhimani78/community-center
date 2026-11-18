@@ -55,10 +55,8 @@ function MaintenanceContent() {
   const searchParams = useSearchParams();
   const tabParam = searchParams.get("tab");
 
-  const { role, bookings, tickets, updateTicketStatus } = useDashboard();
+  const { role, tickets, updateTicketStatus } = useDashboard();
   const isAdmin = role === "admin";
-  const defaultInspectionReceipt =
-    bookings.find((b) => b.status !== "Cancelled")?.receiptNo || bookings[0]?.receiptNo || "1056";
 
   const [query, setQuery] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("All");
@@ -151,7 +149,7 @@ function MaintenanceContent() {
   }, [baseFiltered, statusFilter]);
 
   if (tabParam === "check") {
-    return <PropertyInspectionView initialBookingId={defaultInspectionReceipt} />;
+    return <PropertyInspectionView />;
   }
 
   return (
@@ -169,7 +167,7 @@ function MaintenanceContent() {
           </div>
 
           <Link
-            href={`/inspections/${defaultInspectionReceipt}`}
+            href="/inspections"
             style={{ minHeight: "40px" }}
             className="interactive-btn px-4 py-2 rounded-xl bg-white border border-[#EFE4CC] text-[#0B2A5B] text-[13px] font-bold inline-flex items-center gap-1.5"
           >
