@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import {
   CheckSquare,
@@ -52,20 +52,67 @@ function SettingsEditor({
   onReset,
 }: {
   systemSettings: SystemSettingsState;
-  onSave: (next: Partial<SystemSettingsState>) => void;
-  onReset: () => void;
+  onSave: (next: Partial<SystemSettingsState>) => Promise<boolean>;
+  onReset: () => Promise<unknown> | void;
 }) {
-  const [draft, setDraft] = useState<SystemSettingsState>(systemSettings);
+  const [draft, setDraftState] = useState<SystemSettingsState>(systemSettings);
+  const [isDirty, setIsDirty] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [savedNotice, setSavedNotice] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  // Sync hydrated / server-updated settings into the form whenever the user has not edited fields locally
+  useEffect(() => {
+    if (!isDirty) {
+      setDraftState(systemSettings);
+    }
+  }, [systemSettings, isDirty]);
+
+  const setDraft = (
+    updater: SystemSettingsState | ((prev: SystemSettingsState) => SystemSettingsState)
+  ) => {
+    setIsDirty(true);
+    setSaveError(null);
+    setDraftState(updater);
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    onSave(draft);
-    setSavedNotice(true);
+    setSaving(true);
+    setSaveError(null);
+    setSavedNotice(false);
+    try {
+      const ok = await onSave(draft);
+      if (ok) {
+        setIsDirty(false);
+        setSavedNotice(true);
+      } else {
+        setSaveError("Could not save settings to server. Please try again.");
+      }
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
+      {saveError && (
+        <div
+          role="alert"
+          className="rounded-xl bg-red-50 border border-red-200 px-4 py-3 text-[13px] font-bold text-[#C62828] flex items-center justify-between gap-2"
+        >
+          <span>{saveError}</span>
+          <button
+            type="button"
+            onClick={() => setSaveError(null)}
+            className="text-[#C62828] hover:opacity-75 cursor-pointer"
+            aria-label="Dismiss error"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
+
       {savedNotice && (
         <div
           role="status"
@@ -392,11 +439,12 @@ function SettingsEditor({
 
         <button
           type="submit"
+          disabled={saving}
           style={{ minHeight: "42px" }}
-          className="interactive-btn px-5 py-2 rounded-xl bg-[#0B2A5B] text-white text-[13.5px] font-bold inline-flex items-center gap-1.5 cursor-pointer"
+          className="interactive-btn px-5 py-2 rounded-xl bg-[#0B2A5B] text-white text-[13.5px] font-bold inline-flex items-center gap-1.5 cursor-pointer disabled:opacity-60"
         >
           <Save className="w-4 h-4 text-[#F4CF6A]" />
-          <span>Save Settings</span>
+          <span>{saving ? "Saving..." : "Save Settings"}</span>
         </button>
       </div>
     </form>
@@ -607,8 +655,8 @@ export default function AdminHub({
               key={settingsVersion}
               systemSettings={systemSettings}
               onSave={(next) => updateSystemSettings(next)}
-              onReset={() => {
-                resetSystemSettings();
+              onReset={async () => {
+                await resetSystemSettings();
                 setSettingsVersion((v) => v + 1);
               }}
             />

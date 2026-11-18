@@ -214,8 +214,8 @@ interface DashboardContextType {
   ) => void;
   decideUserApproval: (targetUserId: string, decision: "Approved" | "Rejected") => void;
   removeUser: (targetUserId: string) => void;
-  updateSystemSettings: (updates: Partial<SystemSettingsState>) => void;
-  resetSystemSettings: () => void;
+  updateSystemSettings: (updates: Partial<SystemSettingsState>) => Promise<boolean>;
+  resetSystemSettings: () => Promise<boolean>;
   updateRolePermission: (
     roleName: SystemUser["role"],
     moduleName: string,
@@ -1812,7 +1812,7 @@ export function DashboardProvider({
   );
 
   const updateSystemSettings = useCallback(
-    (updates: Partial<SystemSettingsState>) => {
+    async (updates: Partial<SystemSettingsState>): Promise<boolean> => {
       setWriteError(null);
       const prevSettings = settingsStore.getSnapshot();
       const nextState = { ...prevSettings, ...updates };
@@ -1823,46 +1823,58 @@ export function DashboardProvider({
         `Geo-fence ${nextState.geofenceRadiusMeters} m`
       );
 
-      fetch("/api/settings", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(nextState),
-      })
-        .then(async (res) => {
-          if (res.ok) return;
-          const payload = await res.json().catch(() => null);
+      try {
+        const res = await fetch("/api/settings", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(nextState),
+        });
+        const payload = await res.json().catch(() => null);
+        if (!res.ok) {
           settingsStore.set(prevSettings);
           setWriteError(payload?.message || `Could not save settings (HTTP ${res.status}).`);
-        })
-        .catch(() => {
-          settingsStore.set(prevSettings);
-          setWriteError("Network error saving settings. Changes were reverted.");
-        });
+          return false;
+        }
+        if (payload?.settings) {
+          settingsStore.set((prev) => ({ ...prev, ...payload.settings }));
+        }
+        return true;
+      } catch {
+        settingsStore.set(prevSettings);
+        setWriteError("Network error saving settings. Changes were reverted.");
+        return false;
+      }
     },
     [appendLog]
   );
 
-  const resetSystemSettings = useCallback(() => {
+  const resetSystemSettings = useCallback(async (): Promise<boolean> => {
     setWriteError(null);
     const prevSettings = settingsStore.getSnapshot();
     settingsStore.set(DEFAULT_SYSTEM_SETTINGS);
     appendLog("Settings", "Reset settings to defaults", "Restored centre & pricing defaults");
 
-    fetch("/api/settings", {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(DEFAULT_SYSTEM_SETTINGS),
-    })
-      .then(async (res) => {
-        if (res.ok) return;
-        const payload = await res.json().catch(() => null);
+    try {
+      const res = await fetch("/api/settings", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(DEFAULT_SYSTEM_SETTINGS),
+      });
+      const payload = await res.json().catch(() => null);
+      if (!res.ok) {
         settingsStore.set(prevSettings);
         setWriteError(payload?.message || `Could not reset settings (HTTP ${res.status}).`);
-      })
-      .catch(() => {
-        settingsStore.set(prevSettings);
-        setWriteError("Network error resetting settings. Changes were reverted.");
-      });
+        return false;
+      }
+      if (payload?.settings) {
+        settingsStore.set((prev) => ({ ...prev, ...payload.settings }));
+      }
+      return true;
+    } catch {
+      settingsStore.set(prevSettings);
+      setWriteError("Network error resetting settings. Changes were reverted.");
+      return false;
+    }
   }, [appendLog]);
 
   const updateRolePermission = useCallback(
