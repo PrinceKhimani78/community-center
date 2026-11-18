@@ -232,6 +232,7 @@ export interface ApprovalItem {
     | "Free Hall Use"
     | "Booking Cancellation"
     | "User Access"
+    | "Password Reset"
     | "Deposit Refund"
     | "Expense"
     | "Repair Cost"

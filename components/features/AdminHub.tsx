@@ -30,10 +30,11 @@ import {
   useDashboard,
   type SystemSettingsState,
 } from "@/lib/context/DashboardContext";
-import { PERMISSION_MODULES, type SystemUser } from "@/lib/mock/dashboard";
+import { PERMISSION_MODULES, type ApprovalItem, type SystemUser } from "@/lib/mock/dashboard";
 import PageShell from "@/components/common/PageShell";
 import TabBar, { TabItem } from "@/components/common/TabBar";
 import StatusBadge from "@/components/common/StatusBadge";
+import ApprovalDetailModal from "@/components/features/ApprovalDetailModal";
 
 export type AdminTab = "settings" | "approvals" | "reports" | "users" | "audit";
 
@@ -465,8 +466,12 @@ export default function AdminHub({
     approvals,
     decideApproval,
     bookings,
+    applicants,
     payments,
     expenses,
+    refunds,
+    tickets,
+    staffAttendanceLogs,
     users,
     rolePermissions,
     toggleUserActive,
@@ -484,6 +489,11 @@ export default function AdminHub({
   const [activeTab, setActiveTab] = useState<AdminTab>(initialTab);
   const [reportCategory, setReportCategory] = useState<"Bookings" | "Money">("Bookings");
   const [settingsVersion, setSettingsVersion] = useState(0);
+  const [selectedApprovalId, setSelectedApprovalId] = useState<string | null>(null);
+  const selectedApproval: ApprovalItem | null = useMemo(
+    () => (selectedApprovalId ? approvals.find((a) => a.id === selectedApprovalId) || null : null),
+    [approvals, selectedApprovalId]
+  );
 
   // Add / Filter / Edit / Remove User UI state
   const [roleFilter, setRoleFilter] = useState<"All" | SystemUser["role"]>("All");
@@ -664,49 +674,96 @@ export default function AdminHub({
 
           {activeTab === "approvals" && (
             <div className="space-y-3">
-              {approvals.map((item) => (
-                <div
-                  key={item.id}
-                  className="interactive-row bg-white rounded-2xl border border-[#EFE4CC] p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4"
-                >
-                  <div className="space-y-1">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="text-[11.5px] font-bold px-2.5 py-0.5 rounded-full bg-[#FAF5EB] border border-[#EFE4CC] text-[#0B2A5B]">
-                        {item.type}
-                      </span>
-                      <h3 className="font-bold text-[#0B2A5B] text-[15.5px]">{item.title}</h3>
-                      <StatusBadge status={item.status} />
-                    </div>
-                    <p className="text-[13px] text-[#5B6474]">{item.detail}</p>
-                    <p className="text-[13px] font-bold text-[#0B2A5B]">
-                      Amount: {item.amountLabel} · Requested by {item.requester}
-                    </p>
-                  </div>
-
-                  {item.status === "Pending" && (
-                    <div className="flex items-center gap-2.5 shrink-0">
-                      <button
-                        type="button"
-                        onClick={() => decideApproval(item.id, "Approved")}
-                        style={{ minHeight: "42px" }}
-                        className="interactive-btn px-4 py-2 rounded-xl bg-[#15803D] text-white text-[13px] font-bold inline-flex items-center gap-1.5 cursor-pointer"
-                      >
-                        <Check className="w-4 h-4" />
-                        <span>Approve</span>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => decideApproval(item.id, "Rejected")}
-                        style={{ minHeight: "42px" }}
-                        className="interactive-btn px-4 py-2 rounded-xl bg-white border border-red-300 text-[#C62828] text-[13px] font-bold inline-flex items-center gap-1.5 cursor-pointer"
-                      >
-                        <X className="w-4 h-4" />
-                        <span>Reject</span>
-                      </button>
-                    </div>
-                  )}
+              {approvals.length === 0 ? (
+                <div className="bg-white rounded-2xl border border-[#EFE4CC] p-8 text-center text-[13.5px] text-[#5B6474]">
+                  No approval requests yet.
                 </div>
-              ))}
+              ) : (
+                approvals.map((item) => (
+                  <div
+                    key={item.id}
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => setSelectedApprovalId(item.id)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        setSelectedApprovalId(item.id);
+                      }
+                    }}
+                    className="interactive-row bg-white rounded-2xl border border-[#EFE4CC] hover:border-[#E2B544] transition-colors p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 cursor-pointer"
+                  >
+                    <div className="space-y-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="text-[11.5px] font-bold px-2.5 py-0.5 rounded-full bg-[#FAF5EB] border border-[#EFE4CC] text-[#0B2A5B]">
+                          {item.type}
+                        </span>
+                        <h3 className="font-bold text-[#0B2A5B] text-[15.5px]">{item.title}</h3>
+                        <StatusBadge status={item.status} />
+                      </div>
+                      <p className="text-[13px] text-[#5B6474]">{item.detail}</p>
+                      <p className="text-[13px] font-bold text-[#0B2A5B]">
+                        Amount: {item.amountLabel} · Requested by {item.requester}
+                        <span className="ml-2 text-[12px] font-semibold text-[#C9971C] underline-offset-2 hover:underline">
+                          View details →
+                        </span>
+                      </p>
+                    </div>
+
+                    <div
+                      className="flex items-center gap-2.5 shrink-0"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <button
+                        type="button"
+                        onClick={() => setSelectedApprovalId(item.id)}
+                        style={{ minHeight: "42px" }}
+                        className="interactive-btn px-3.5 py-2 rounded-xl bg-[#FAF5EB] border border-[#EFE4CC] text-[#0B2A5B] text-[13px] font-bold inline-flex items-center gap-1.5 cursor-pointer hover:border-[#E2B544]"
+                      >
+                        <Eye className="w-4 h-4 text-[#C9971C]" />
+                        <span>Details</span>
+                      </button>
+
+                      {item.status === "Pending" && (
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => decideApproval(item.id, "Approved")}
+                            style={{ minHeight: "42px" }}
+                            className="interactive-btn px-4 py-2 rounded-xl bg-[#15803D] text-white text-[13px] font-bold inline-flex items-center gap-1.5 cursor-pointer"
+                          >
+                            <Check className="w-4 h-4" />
+                            <span>Approve</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => decideApproval(item.id, "Rejected")}
+                            style={{ minHeight: "42px" }}
+                            className="interactive-btn px-4 py-2 rounded-xl bg-white border border-red-300 text-[#C62828] text-[13px] font-bold inline-flex items-center gap-1.5 cursor-pointer"
+                          >
+                            <X className="w-4 h-4" />
+                            <span>Reject</span>
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                ))
+              )}
+
+              <ApprovalDetailModal
+                item={selectedApproval}
+                onClose={() => setSelectedApprovalId(null)}
+                onDecide={decideApproval}
+                bookings={bookings}
+                payments={payments}
+                expenses={expenses}
+                refunds={refunds}
+                tickets={tickets}
+                applicants={applicants}
+                users={users}
+                staffAttendanceLogs={staffAttendanceLogs}
+              />
             </div>
           )}
 
