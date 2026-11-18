@@ -112,6 +112,8 @@ export interface SystemSettingsState {
 interface DashboardContextType {
   role: "manager" | "admin";
   userId: string;
+  writeError: string | null;
+  clearWriteError: () => void;
   actionItems: ActionItem[];
   actionCount: number;
   unreadAlertCount: number;
@@ -185,7 +187,7 @@ interface DashboardContextType {
   ) => Promise<void>;
   toggleMyCheckIn: (geo?: GeoCheckPayload, overrideReason?: string) => Promise<void>;
   addAdminAlert: (input: AdminAlertInput) => void;
-  decideApproval: (approvalId: string, decision: "Approved" | "Rejected") => void;
+  decideApproval: (approvalId: string, decision: "Approved" | "Rejected") => Promise<void>;
   markAllNotificationsRead: () => void;
   toggleNotificationRead: (notificationId: string) => void;
   toggleUserActive: (userId: string) => void;
@@ -356,6 +358,8 @@ export function DashboardProvider({
 }: DashboardProviderProps) {
   const [role] = useState<"manager" | "admin">(initialRole);
   const [userId] = useState<string>(initialUserId);
+  const [writeError, setWriteError] = useState<string | null>(null);
+  const clearWriteError = useCallback(() => setWriteError(null), []);
   const [actionItems, setActionItems] = useState<ActionItem[]>(INITIAL_ACTION_ITEMS);
   const [lastCompleted, setLastCompleted] = useState<CompletedRecord | null>(null);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
@@ -692,7 +696,9 @@ export function DashboardProvider({
 
   const cancelBooking = useCallback(
     (bookingId: string, reason?: string) => {
+      setWriteError(null);
       const trimmedReason = reason?.trim() || "Cancelled by staff";
+      const prevBookings = bookings;
       if (role === "admin") {
         setBookings((prev) =>
           prev.map((b) =>
@@ -724,19 +730,31 @@ export function DashboardProvider({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ status: "Cancelled", cancellationReason: trimmedReason }),
       })
-        .then((res) => {
-          if (res.ok) refreshBootstrap();
+        .then(async (res) => {
+          if (res.ok) {
+            void refreshBootstrap();
+            return;
+          }
+          const payload = await res.json().catch(() => null);
+          setBookings(prevBookings);
+          setWriteError(payload?.message || `Could not cancel booking (HTTP ${res.status}).`);
         })
-        .catch(() => {});
+        .catch(() => {
+          setBookings(prevBookings);
+          setWriteError("Network error cancelling booking. Changes were reverted.");
+        });
     },
-    [role, appendLog, refreshBootstrap]
+    [bookings, role, appendLog, refreshBootstrap]
   );
 
   const updateBookingStatus = useCallback(
     (bookingId: string, status: BookingStatus) => {
       if (status === "Confirmed" && role !== "admin") {
+        setWriteError("Only Admin can confirm bookings.");
         return;
       }
+      setWriteError(null);
+      const prevBookings = bookings;
       setBookings((prev) =>
         prev.map((b) => (b.id === bookingId || b.receiptNo === bookingId ? { ...b, status } : b))
       );
@@ -747,22 +765,32 @@ export function DashboardProvider({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ status }),
       })
-        .then((res) => {
-          if (res.ok) refreshBootstrap();
+        .then(async (res) => {
+          if (res.ok) {
+            void refreshBootstrap();
+            return;
+          }
+          const payload = await res.json().catch(() => null);
+          setBookings(prevBookings);
+          setWriteError(payload?.message || `Could not update booking status (HTTP ${res.status}).`);
         })
-        .catch(() => {});
+        .catch(() => {
+          setBookings(prevBookings);
+          setWriteError("Network error updating booking status. Changes were reverted.");
+        });
     },
-    [role, appendLog, refreshBootstrap]
+    [bookings, role, appendLog, refreshBootstrap]
   );
 
   const addApplicant = useCallback(
     (input: Omit<ApplicantRecord, "id">) => {
+      setWriteError(null);
       const nextNum = 115 + applicants.length;
       const created: ApplicantRecord = {
         ...input,
         id: `app-${Date.now()}`,
         customerCode: input.customerCode || `CU-0${nextNum}`,
-        memberSince: input.memberSince || "Oct 2026",
+        memberSince: input.memberSince || new Date().toLocaleDateString("en-IN", { month: "short", year: "numeric" }),
         preferences: input.preferences || [],
       };
       setApplicants((prev) => [created, ...prev]);
@@ -775,13 +803,21 @@ export function DashboardProvider({
       })
         .then(async (res) => {
           const payload = await res.json().catch(() => null);
-          if (res.ok && payload?.applicant) {
-            setApplicants((prev) =>
-              prev.map((a) => (a.id === created.id ? payload.applicant : a))
-            );
+          if (res.ok) {
+            if (payload?.applicant) {
+              setApplicants((prev) =>
+                prev.map((a) => (a.id === created.id ? payload.applicant : a))
+              );
+            }
+            return;
           }
+          setApplicants((prev) => prev.filter((a) => a.id !== created.id));
+          setWriteError(payload?.message || `Could not add customer (HTTP ${res.status}).`);
         })
-        .catch(() => {});
+        .catch(() => {
+          setApplicants((prev) => prev.filter((a) => a.id !== created.id));
+          setWriteError("Network error adding customer. Changes were reverted.");
+        });
 
       return created;
     },
@@ -790,6 +826,8 @@ export function DashboardProvider({
 
   const updateApplicant = useCallback(
     (applicantId: string, updates: Partial<Omit<ApplicantRecord, "id">>) => {
+      setWriteError(null);
+      const prevApplicants = applicants;
       const requiresEditApproval =
         role !== "admin" && systemSettings.requireCustomerEditAdminApproval;
       if (!requiresEditApproval) {
@@ -808,12 +846,21 @@ export function DashboardProvider({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(updates),
       })
-        .then((res) => {
-          if (res.ok) refreshBootstrap();
+        .then(async (res) => {
+          if (res.ok) {
+            void refreshBootstrap();
+            return;
+          }
+          const payload = await res.json().catch(() => null);
+          setApplicants(prevApplicants);
+          setWriteError(payload?.message || `Could not update customer (HTTP ${res.status}).`);
         })
-        .catch(() => {});
+        .catch(() => {
+          setApplicants(prevApplicants);
+          setWriteError("Network error updating customer. Changes were reverted.");
+        });
     },
-    [role, systemSettings.requireCustomerEditAdminApproval, appendLog, refreshBootstrap]
+    [applicants, role, systemSettings.requireCustomerEditAdminApproval, appendLog, refreshBootstrap]
   );
 
   const recordPayment = useCallback(
@@ -1425,56 +1472,82 @@ export function DashboardProvider({
   );
 
   const decideApproval = useCallback(
-    (approvalId: string, decision: "Approved" | "Rejected") => {
-      if (role !== "admin") return;
+    async (approvalId: string, decision: "Approved" | "Rejected"): Promise<void> => {
+      if (role !== "admin") {
+        setWriteError("Only Admin can decide approval requests.");
+        return;
+      }
+      setWriteError(null);
       const target = approvals.find((a) => a.id === approvalId);
-      setApprovals((prev) =>
-        prev.map((a) => (a.id === approvalId ? { ...a, status: decision } : a))
-      );
-      if (target) {
-        if (target.type === "Booking" || target.type === "Free Hall Use") {
-          const nextStatus: BookingStatus = decision === "Approved" ? "Confirmed" : "Cancelled";
-          setBookings((prev) =>
-            prev.map((b) =>
-              b.receiptNo === target.referenceNo
-                ? {
-                    ...b,
-                    status: nextStatus,
-                    cancellationReason: decision === "Rejected" ? "Rejected by Admin" : b.cancellationReason,
-                  }
-                : b
-            )
-          );
-        } else if (target.type === "Booking Cancellation" && decision === "Approved") {
-          setBookings((prev) =>
-            prev.map((b) =>
-              b.receiptNo === target.referenceNo ? { ...b, status: "Cancelled" } : b
-            )
-          );
+
+      try {
+        const res = await fetch(`/api/approvals/${encodeURIComponent(approvalId)}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ status: decision }),
+        });
+        const payload = await res.json().catch(() => null);
+        if (!res.ok) {
+          const msg = payload?.message || `Could not ${decision.toLowerCase()} request (HTTP ${res.status}).`;
+          setWriteError(msg);
+          void refreshBootstrap();
+          throw new Error(msg);
+        }
+
+        setApprovals((prev) =>
+          prev.map((a) => (a.id === approvalId ? { ...a, status: decision } : a))
+        );
+        if (target) {
+          if (target.type === "Booking" || target.type === "Free Hall Use") {
+            const nextStatus: BookingStatus = decision === "Approved" ? "Confirmed" : "Cancelled";
+            setBookings((prev) =>
+              prev.map((b) =>
+                b.receiptNo === target.referenceNo
+                  ? {
+                      ...b,
+                      status: nextStatus,
+                      cancellationReason:
+                        decision === "Rejected" ? "Rejected by Admin" : b.cancellationReason,
+                    }
+                  : b
+              )
+            );
+          } else if (target.type === "Booking Cancellation" && decision === "Approved") {
+            setBookings((prev) =>
+              prev.map((b) =>
+                b.receiptNo === target.referenceNo ? { ...b, status: "Cancelled" } : b
+              )
+            );
+          }
+        }
+        appendLog("Approval", `${decision} request`, target?.title || approvalId);
+        void refreshBootstrap();
+      } catch (err) {
+        if (err instanceof Error && err.message) {
+          setWriteError(err.message);
+        } else {
+          setWriteError("Network error deciding approval request.");
         }
       }
-      appendLog("Approval", `${decision} request`, target?.title || approvalId);
-
-      fetch(`/api/approvals/${encodeURIComponent(approvalId)}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status: decision }),
-      })
-        .then((res) => {
-          if (res.ok) refreshBootstrap();
-        })
-        .catch(() => {});
     },
     [role, approvals, appendLog, refreshBootstrap]
   );
 
   const markAllNotificationsRead = useCallback(() => {
+    const prevNotifs = notificationsStore.getSnapshot();
     notificationsStore.set((prev) => prev.map((n) => ({ ...n, unread: false })));
-    fetch("/api/notifications/read-all", { method: "PATCH" }).catch(() => {});
+    fetch("/api/notifications/read-all", { method: "PATCH" })
+      .then((res) => {
+        if (!res.ok) notificationsStore.set(prevNotifs);
+      })
+      .catch(() => {
+        notificationsStore.set(prevNotifs);
+      });
   }, []);
 
   const toggleNotificationRead = useCallback((notificationId: string) => {
-    const current = notificationsStore.getSnapshot().find((n) => n.id === notificationId);
+    const prevNotifs = notificationsStore.getSnapshot();
+    const current = prevNotifs.find((n) => n.id === notificationId);
     const nextUnread = current ? !current.unread : false;
     notificationsStore.set((prev) =>
       prev.map((n) => (n.id === notificationId ? { ...n, unread: nextUnread } : n))
@@ -1483,12 +1556,20 @@ export function DashboardProvider({
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ unread: nextUnread }),
-    }).catch(() => {});
+    })
+      .then((res) => {
+        if (!res.ok) notificationsStore.set(prevNotifs);
+      })
+      .catch(() => {
+        notificationsStore.set(prevNotifs);
+      });
   }, []);
 
   const toggleUserActive = useCallback(
     (targetUserId: string) => {
-      const target = usersStore.getSnapshot().find((u) => u.id === targetUserId);
+      setWriteError(null);
+      const prevUsers = usersStore.getSnapshot();
+      const target = prevUsers.find((u) => u.id === targetUserId);
       const nextActive = target ? !target.active : true;
       usersStore.set((prev) =>
         prev.map((u) => (u.id === targetUserId ? { ...u, active: nextActive } : u))
@@ -1499,7 +1580,17 @@ export function DashboardProvider({
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ active: nextActive }),
-      }).catch(() => {});
+      })
+        .then(async (res) => {
+          if (res.ok) return;
+          const payload = await res.json().catch(() => null);
+          usersStore.set(prevUsers);
+          setWriteError(payload?.message || `Could not update user status (HTTP ${res.status}).`);
+        })
+        .catch(() => {
+          usersStore.set(prevUsers);
+          setWriteError("Network error updating user status. Changes were reverted.");
+        });
     },
     [appendLog]
   );
@@ -1511,6 +1602,7 @@ export function DashboardProvider({
       role: SystemUser["role"];
       password: string;
     }): SystemUser => {
+      setWriteError(null);
       const created: SystemUser = {
         id: `u-${Date.now()}`,
         userId: input.userId.trim(),
@@ -1529,15 +1621,23 @@ export function DashboardProvider({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(input),
       })
-        .then((res) => (res.ok ? res.json() : null))
-        .then((payload) => {
-          if (payload?.user) {
-            usersStore.set((prev) =>
-              prev.map((u) => (u.id === created.id ? payload.user : u))
-            );
+        .then(async (res) => {
+          const payload = await res.json().catch(() => null);
+          if (res.ok) {
+            if (payload?.user) {
+              usersStore.set((prev) =>
+                prev.map((u) => (u.id === created.id ? payload.user : u))
+              );
+            }
+            return;
           }
+          usersStore.set((prev) => prev.filter((u) => u.id !== created.id));
+          setWriteError(payload?.message || `Could not create user (HTTP ${res.status}).`);
         })
-        .catch(() => {});
+        .catch(() => {
+          usersStore.set((prev) => prev.filter((u) => u.id !== created.id));
+          setWriteError("Network error creating user. Changes were reverted.");
+        });
 
       return created;
     },
@@ -1551,6 +1651,8 @@ export function DashboardProvider({
         Pick<SystemUser, "name" | "userId" | "role" | "password" | "active" | "approvalStatus">
       >
     ) => {
+      setWriteError(null);
+      const prevUsers = usersStore.getSnapshot();
       usersStore.set((prev) =>
         prev.map((u) => {
           if (u.id !== targetUserId) return u;
@@ -1573,13 +1675,25 @@ export function DashboardProvider({
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(updates),
-      }).catch(() => {});
+      })
+        .then(async (res) => {
+          if (res.ok) return;
+          const payload = await res.json().catch(() => null);
+          usersStore.set(prevUsers);
+          setWriteError(payload?.message || `Could not update user (HTTP ${res.status}).`);
+        })
+        .catch(() => {
+          usersStore.set(prevUsers);
+          setWriteError("Network error updating user. Changes were reverted.");
+        });
     },
     [appendLog]
   );
 
   const decideUserApproval = useCallback(
     (targetUserId: string, decision: "Approved" | "Rejected") => {
+      setWriteError(null);
+      const prevUsers = usersStore.getSnapshot();
       const nextActive = decision === "Approved";
       usersStore.set((prev) =>
         prev.map((u) =>
@@ -1592,14 +1706,26 @@ export function DashboardProvider({
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ approvalStatus: decision, active: nextActive }),
-      }).catch(() => {});
+      })
+        .then(async (res) => {
+          if (res.ok) return;
+          const payload = await res.json().catch(() => null);
+          usersStore.set(prevUsers);
+          setWriteError(payload?.message || `Could not update user approval (HTTP ${res.status}).`);
+        })
+        .catch(() => {
+          usersStore.set(prevUsers);
+          setWriteError("Network error updating user approval. Changes were reverted.");
+        });
     },
     [appendLog]
   );
 
   const removeUser = useCallback(
     (targetUserId: string) => {
-      const target = usersStore.getSnapshot().find((u) => u.id === targetUserId);
+      setWriteError(null);
+      const prevUsers = usersStore.getSnapshot();
+      const target = prevUsers.find((u) => u.id === targetUserId);
       usersStore.set((prev) => prev.filter((u) => u.id !== targetUserId));
       appendLog(
         "User",
@@ -1609,14 +1735,26 @@ export function DashboardProvider({
 
       fetch(`/api/users/${encodeURIComponent(targetUserId)}`, {
         method: "DELETE",
-      }).catch(() => {});
+      })
+        .then(async (res) => {
+          if (res.ok) return;
+          const payload = await res.json().catch(() => null);
+          usersStore.set(prevUsers);
+          setWriteError(payload?.message || `Could not remove user (HTTP ${res.status}).`);
+        })
+        .catch(() => {
+          usersStore.set(prevUsers);
+          setWriteError("Network error removing user. Changes were reverted.");
+        });
     },
     [appendLog]
   );
 
   const updateSystemSettings = useCallback(
     (updates: Partial<SystemSettingsState>) => {
-      const nextState = { ...settingsStore.getSnapshot(), ...updates };
+      setWriteError(null);
+      const prevSettings = settingsStore.getSnapshot();
+      const nextState = { ...prevSettings, ...updates };
       settingsStore.set(nextState);
       appendLog(
         "Settings",
@@ -1628,12 +1766,24 @@ export function DashboardProvider({
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(nextState),
-      }).catch(() => {});
+      })
+        .then(async (res) => {
+          if (res.ok) return;
+          const payload = await res.json().catch(() => null);
+          settingsStore.set(prevSettings);
+          setWriteError(payload?.message || `Could not save settings (HTTP ${res.status}).`);
+        })
+        .catch(() => {
+          settingsStore.set(prevSettings);
+          setWriteError("Network error saving settings. Changes were reverted.");
+        });
     },
     [appendLog]
   );
 
   const resetSystemSettings = useCallback(() => {
+    setWriteError(null);
+    const prevSettings = settingsStore.getSnapshot();
     settingsStore.set(DEFAULT_SYSTEM_SETTINGS);
     appendLog("Settings", "Reset settings to defaults", "Restored centre & pricing defaults");
 
@@ -1641,7 +1791,17 @@ export function DashboardProvider({
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(DEFAULT_SYSTEM_SETTINGS),
-    }).catch(() => {});
+    })
+      .then(async (res) => {
+        if (res.ok) return;
+        const payload = await res.json().catch(() => null);
+        settingsStore.set(prevSettings);
+        setWriteError(payload?.message || `Could not reset settings (HTTP ${res.status}).`);
+      })
+      .catch(() => {
+        settingsStore.set(prevSettings);
+        setWriteError("Network error resetting settings. Changes were reverted.");
+      });
   }, [appendLog]);
 
   const updateRolePermission = useCallback(
@@ -1652,6 +1812,8 @@ export function DashboardProvider({
       value: boolean
     ) => {
       if (roleName === "Admin") return;
+      setWriteError(null);
+      const prevPerms = rolePermissionsStore.getSnapshot();
       let updatedSnapshot: RolePermissionItem[] = [];
       rolePermissionsStore.set((prev) => {
         const exists = prev.some((p) => p.role === roleName && p.module === moduleName);
@@ -1679,7 +1841,17 @@ export function DashboardProvider({
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ permissions: updatedSnapshot }),
-      }).catch(() => {});
+      })
+        .then(async (res) => {
+          if (res.ok) return;
+          const payload = await res.json().catch(() => null);
+          rolePermissionsStore.set(prevPerms);
+          setWriteError(payload?.message || `Could not save permissions (HTTP ${res.status}).`);
+        })
+        .catch(() => {
+          rolePermissionsStore.set(prevPerms);
+          setWriteError("Network error saving permissions. Changes were reverted.");
+        });
     },
     [appendLog]
   );
@@ -1689,6 +1861,8 @@ export function DashboardProvider({
       value={{
         role,
         userId,
+        writeError,
+        clearWriteError,
         actionItems,
         actionCount: actionItems.length,
         unreadAlertCount,

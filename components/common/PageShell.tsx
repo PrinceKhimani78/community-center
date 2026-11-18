@@ -1,6 +1,8 @@
 "use client";
 
 import React, { ReactNode } from "react";
+import { AlertCircle, X } from "lucide-react";
+import { useDashboard } from "@/lib/context/DashboardContext";
 
 interface PageShellProps {
   title?: string;
@@ -17,6 +19,7 @@ export default function PageShell({
   children,
   hideHeader = false,
 }: PageShellProps) {
+  const { writeError, clearWriteError } = useDashboard();
   return (
     <div
       style={{
@@ -67,6 +70,26 @@ export default function PageShell({
       </div>
 
       <div className="relative z-10 max-w-[1160px] mx-auto flex flex-col gap-5">
+        {writeError && (
+          <div
+            role="alert"
+            className="p-3.5 rounded-xl bg-red-50 border border-red-200 text-[#C62828] text-[13px] font-semibold flex items-center justify-between gap-3 shadow-xs"
+          >
+            <span className="inline-flex items-center gap-2">
+              <AlertCircle className="w-4 h-4 shrink-0" />
+              <span>{writeError}</span>
+            </span>
+            <button
+              type="button"
+              onClick={clearWriteError}
+              aria-label="Dismiss error"
+              className="w-7 h-7 rounded-full hover:bg-red-100 flex items-center justify-center shrink-0 cursor-pointer"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        )}
+
         {!hideHeader && title && (
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 animate-fade-up">
             <div>
