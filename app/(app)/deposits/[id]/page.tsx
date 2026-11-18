@@ -5,17 +5,75 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { ArrowLeft, Camera, Check, CheckCircle2, Plus, Trash2 } from "lucide-react";
 import { useDashboard } from "@/lib/context/DashboardContext";
-import type { DepositDeductionItem, PaymentMode } from "@/lib/mock/dashboard";
+import type { DepositDeductionItem, DepositRefundRecord, PaymentMode } from "@/lib/mock/dashboard";
 import PageShell from "@/components/common/PageShell";
 import { formatBookingCode } from "@/lib/utils/bookings";
 
 function DepositRefundContent() {
   const params = useParams<{ id: string }>();
-  const { refunds, role, updateDepositRefund } = useDashboard();
+  const { refunds } = useDashboard();
+  const [fetchedRefund, setFetchedRefund] = useState<DepositRefundRecord | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [fetchAttempted, setFetchAttempted] = useState(false);
 
-  const currentRefund =
-    refunds.find((r) => r.bookingReceiptNo === params.id || r.id === params.id) ||
-    refunds[0];
+  const currentRefund = useMemo(
+    () =>
+      refunds.find((r) => r.bookingReceiptNo === params.id || r.id === params.id) ||
+      fetchedRefund ||
+      refunds[0],
+    [refunds, params.id, fetchedRefund]
+  );
+
+  React.useEffect(() => {
+    if (!currentRefund && params.id && !fetchAttempted) {
+      setLoading(true);
+      fetch(`/api/deposit-refunds/${encodeURIComponent(params.id)}`, { cache: "no-store" })
+        .then((res) => (res.ok ? res.json() : null))
+        .then((data) => {
+          if (data?.depositRefund) setFetchedRefund(data.depositRefund);
+        })
+        .catch(() => {})
+        .finally(() => {
+          setLoading(false);
+          setFetchAttempted(true);
+        });
+    }
+  }, [currentRefund, params.id, fetchAttempted]);
+
+  if (loading && !currentRefund) {
+    return (
+      <PageShell hideHeader>
+        <div className="bg-white rounded-2xl border border-[#EFE4CC] p-10 text-center text-[#0B2A5B] font-semibold">
+          Loading deposit refund details...
+        </div>
+      </PageShell>
+    );
+  }
+
+  if (!currentRefund) {
+    return (
+      <PageShell hideHeader>
+        <div className="bg-white rounded-2xl border border-[#EFE4CC] p-8 text-center space-y-3">
+          <h1 className="text-[18px] font-bold text-[#0B2A5B]">No Deposit Refund Record Yet</h1>
+          <p className="text-[13px] text-[#5B6474]">
+            Complete an After-Event Hall Inspection for booking #{params.id} to generate its deposit refund settlement.
+          </p>
+          <Link
+            href={`/inspections/${params.id}`}
+            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-[#0B2A5B] text-white text-[13px] font-semibold"
+          >
+            Open Hall Inspection
+          </Link>
+        </div>
+      </PageShell>
+    );
+  }
+
+  return <DepositRefundInner key={currentRefund.id} currentRefund={currentRefund} />;
+}
+
+function DepositRefundInner({ currentRefund }: { currentRefund: DepositRefundRecord }) {
+  const { refunds, role, updateDepositRefund } = useDashboard();
 
   const [showAddDeduction, setShowAddDeduction] = useState(false);
   const [dedItem, setDedItem] = useState("");

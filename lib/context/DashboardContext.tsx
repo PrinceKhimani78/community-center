@@ -995,16 +995,21 @@ export function DashboardProvider({
       const maxNo = tickets.reduce((max, t) => {
         const num = parseInt(t.ticketNo.split("-").pop() || "0", 10);
         return Number.isFinite(num) && num > max ? num : max;
-      }, 112);
-      const nextNo = `MC-2026-${String(maxNo + 1).padStart(4, "0")}`;
+      }, 114);
+      const nextNo = `MC-${new Date().getFullYear()}-${String(maxNo + 1).padStart(4, "0")}`;
       const actor = role === "admin" ? "Admin" : "Manager";
       const ticketStatus: MaintenanceTicket["status"] = input.status || "Pending";
+      const dateLabel = new Date().toLocaleDateString("en-IN", {
+        day: "2-digit",
+        month: "short",
+        year: "numeric",
+      });
       const created: MaintenanceTicket = {
         ...input,
         id: `mnt-${Date.now()}`,
         ticketNo: nextNo,
         raisedBy: actor,
-        dateLabel: "20 Oct 2026",
+        dateLabel,
         status: ticketStatus,
       };
       setTickets((prev) => [created, ...prev]);
@@ -1030,33 +1035,69 @@ export function DashboardProvider({
         ticketStatus === "Draft" ? `Saved draft ${nextNo}` : `Raised ticket ${nextNo}`,
         created.title
       );
+
+      fetch("/api/tickets", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ...input,
+          status: ticketStatus,
+        }),
+      })
+        .then((res) => {
+          if (res.ok) void refreshBootstrap();
+        })
+        .catch(() => {});
+
       return created;
     },
-    [tickets, role, appendLog]
+    [tickets, role, appendLog, refreshBootstrap]
   );
 
   const updateTicketStatus = useCallback(
     (ticketId: string, status: MaintenanceTicket["status"]) => {
       setTickets((prev) => prev.map((t) => (t.id === ticketId ? { ...t, status } : t)));
       appendLog("Maintenance", `Updated repair ticket to ${status}`, ticketId);
+
+      fetch(`/api/tickets/${encodeURIComponent(ticketId)}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status }),
+      })
+        .then((res) => {
+          if (res.ok) void refreshBootstrap();
+        })
+        .catch(() => {});
     },
-    [appendLog]
+    [appendLog, refreshBootstrap]
   );
 
   const setHallCheckItemStatus = useCallback(
     (itemId: string, status: "OK" | "Issue", issueCost = 0, note = "") => {
+      const normalizedCost = status === "OK" ? 0 : issueCost;
+      const normalizedNote = status === "OK" ? "" : note;
       setHallCheckItems((prev) =>
         prev.map((item) =>
           item.id === itemId
             ? {
               ...item,
               status,
-              issueCost: status === "OK" ? 0 : issueCost,
-              note: status === "OK" ? "" : note,
+              issueCost: normalizedCost,
+              note: normalizedNote,
             }
             : item
         )
       );
+
+      fetch(`/api/hall-checks/${encodeURIComponent(itemId)}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          status,
+          issueCost: normalizedCost,
+          note: normalizedNote,
+        }),
+      }).catch(() => {});
     },
     []
   );
@@ -1102,7 +1143,7 @@ export function DashboardProvider({
                   deductionAmount: totalDeduction,
                   deductionNote,
                   deductionItems,
-                  inspectionRef: `INS-2026-${bookingReceiptNo}-B · ${issues.length} ${issues.length === 1 ? "issue" : "issues"
+                  inspectionRef: `INS-${new Date().getFullYear()}-${bookingReceiptNo}-B · ${issues.length} ${issues.length === 1 ? "issue" : "issues"
                     }`,
                   status: r.status === "Refunded" ? "Refunded" : "Ready to Refund",
                 }
@@ -1128,7 +1169,7 @@ export function DashboardProvider({
               status: "Ready to Refund",
               collectedLabel: `₹${targetBooking.deposit.toLocaleString("en-IN")} · ${targetBooking.paymentMode || "UPI"
                 }`,
-              inspectionRef: `INS-2026-${targetBooking.receiptNo}-B · ${issues.length} ${issues.length === 1 ? "issue" : "issues"
+              inspectionRef: `INS-${new Date().getFullYear()}-${targetBooking.receiptNo}-B · ${issues.length} ${issues.length === 1 ? "issue" : "issues"
                 }`,
               deductionItems,
             },
@@ -1142,8 +1183,22 @@ export function DashboardProvider({
         `Saved ${mode} inspection for #${bookingReceiptNo}`,
         `${issues.length} issue(s) · Total deduction ₹${totalDeduction.toLocaleString("en-IN")}`
       );
+
+      fetch("/api/hall-checks/save-to-refund", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          bookingReceiptNo,
+          mode,
+          items: hallCheckItems,
+        }),
+      })
+        .then((res) => {
+          if (res.ok) void refreshBootstrap();
+        })
+        .catch(() => {});
     },
-    [hallCheckItems, bookings, appendLog]
+    [hallCheckItems, bookings, appendLog, refreshBootstrap]
   );
 
   const toggleMyCheckIn = useCallback(

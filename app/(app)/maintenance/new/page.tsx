@@ -9,13 +9,20 @@ import {
   Camera,
   CheckCircle2,
   FileText,
+  FolderOpen,
+  Loader2,
   Plus,
-  Upload,
+  Trash2,
 } from "lucide-react";
 import { useDashboard } from "@/lib/context/DashboardContext";
-import type { MaintenanceQuotation, MaintenanceTicket } from "@/lib/mock/dashboard";
+import type {
+  MaintenanceQuotation,
+  MaintenanceTicket,
+  StoredPhoto,
+} from "@/lib/mock/dashboard";
 import PageShell from "@/components/common/PageShell";
-import { hallsConflict, isDateInRange } from "@/lib/utils/bookings";
+import { getTodayISO, hallsConflict, isDateInRange } from "@/lib/utils/bookings";
+import { compressImageFiles } from "@/lib/utils/imageCompression";
 
 const SUB_CATEGORIES: Record<MaintenanceTicket["category"], string[]> = {
   Electrical: ["Lighting", "Audio & Stage", "Fans", "Wiring & Panels"],
@@ -55,10 +62,12 @@ export default function NewMaintenanceRequestPage() {
   const [quoteVendor, setQuoteVendor] = useState("");
   const [quoteAmount, setQuoteAmount] = useState(4500);
 
-  const [photos, setPhotos] = useState<string[]>(["Ceiling panel A", "Switch board"]);
+  const [photos, setPhotos] = useState<StoredPhoto[]>([]);
+  const [compressingPhotos, setCompressingPhotos] = useState(false);
+  const [photoNotice, setPhotoNotice] = useState<string | null>(null);
 
   const [blockHall, setBlockHall] = useState(true);
-  const [blockDateISO, setBlockDateISO] = useState("2026-10-23");
+  const [blockDateISO, setBlockDateISO] = useState(() => getTodayISO());
   const [blockFrom, setBlockFrom] = useState("9:00 AM");
   const [blockTo, setBlockTo] = useState("5:00 PM");
 
@@ -100,11 +109,41 @@ export default function NewMaintenanceRequestPage() {
     setShowAddQuote(false);
   };
 
-  const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
-    if (!files) return;
-    setPhotos((prev) => [...prev, ...Array.from(files).map((f) => f.name)]);
-    e.target.value = "";
+    if (!files || files.length === 0) return;
+    setCompressingPhotos(true);
+    setPhotoNotice(null);
+    try {
+      const compressed = await compressImageFiles(files, {
+        maxDimension: 1200,
+        initialQuality: 0.74,
+        targetMaxKb: 180,
+      });
+      if (compressed.length > 0) {
+        setPhotos((prev) => [
+          ...prev,
+          ...compressed.map((c) => ({
+            id: c.id,
+            name: c.name,
+            dataUrl: c.dataUrl,
+            sizeKb: c.sizeKb,
+          })),
+        ]);
+        const origKb = compressed.reduce((s, c) => s + c.originalSizeKb, 0);
+        const compKb = compressed.reduce((s, c) => s + c.sizeKb, 0);
+        setPhotoNotice(
+          `Added ${compressed.length} compressed photo${compressed.length > 1 ? "s" : ""} (${origKb} KB → ${compKb} KB) ready to store in DB.`
+        );
+      }
+    } finally {
+      setCompressingPhotos(false);
+      e.target.value = "";
+    }
+  };
+
+  const handleRemovePhoto = (photoId: string) => {
+    setPhotos((prev) => prev.filter((p) => p.id !== photoId));
   };
 
   const handleSave = (asDraft: boolean) => {
@@ -416,33 +455,84 @@ export default function NewMaintenanceRequestPage() {
 
             {/* 3. Photos */}
             <section className="bg-white rounded-2xl border border-[#EFE4CC] p-5 space-y-3 shadow-2xs">
-              <div className="flex items-center justify-between gap-2">
+              <div className="flex flex-wrap items-center justify-between gap-2">
                 <h2 style={{ color: "#0B2A5B", fontSize: "16.5px", fontWeight: 700 }}>
-                  Photos
+                  Photos ({photos.length})
                 </h2>
                 <span className="text-[12px] text-[#5B6474]">
-                  JPG / PNG · up to [MAX SIZE] each
+                  PC / Phone Gallery or Camera · Auto-compressed for DB
                 </span>
               </div>
 
+              {photoNotice && (
+                <div className="px-3 py-2 rounded-xl bg-emerald-50 border border-emerald-200 text-[#15803D] text-[12px] font-semibold">
+                  {photoNotice}
+                </div>
+              )}
+
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                {photos.map((label, idx) => (
+                {photos.map((photo) => (
                   <div
-                    key={`${label}-${idx}`}
-                    className="h-24 rounded-xl bg-[#EFECE3] border border-[#E5D9BF] flex flex-col items-center justify-center p-2 text-center text-[12px] text-[#5B6474]"
+                    key={photo.id}
+                    className="relative h-28 rounded-xl overflow-hidden bg-[#EFECE3] border border-[#E5D9BF]"
                   >
-                    <Camera className="w-4 h-4 mb-1 opacity-75" />
-                    <span className="truncate w-full font-medium">{label}</span>
+                    <img
+                      src={photo.dataUrl}
+                      alt={photo.name}
+                      className="w-full h-full object-cover"
+                    />
+                    <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/75 via-black/40 to-transparent px-2 py-1 flex items-center justify-between gap-1 text-[10px] text-white">
+                      <span className="truncate font-medium">{photo.name}</span>
+                      {photo.sizeKb ? (
+                        <span className="shrink-0 opacity-90">{photo.sizeKb} KB</span>
+                      ) : null}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => handleRemovePhoto(photo.id)}
+                      aria-label={`Remove ${photo.name}`}
+                      className="absolute top-1.5 right-1.5 w-6 h-6 rounded-full bg-black/65 text-white flex items-center justify-center hover:bg-[#C62828] cursor-pointer"
+                    >
+                      <Trash2 className="w-3 h-3" />
+                    </button>
                   </div>
                 ))}
 
-                <label className="h-24 rounded-xl border-2 border-dashed border-[#C9971C]/60 bg-[#FFFDF7] flex flex-col items-center justify-center text-[#8A6510] text-[12.5px] font-bold cursor-pointer hover:bg-[#FEF5DD]/40">
-                  <Upload className="w-4 h-4 mb-1" />
-                  <span>Upload</span>
+                <label className="h-28 rounded-xl border-2 border-dashed border-[#C9971C]/60 bg-[#FFFDF7] flex flex-col items-center justify-center p-2 text-center text-[#8A6510] text-[12px] font-bold cursor-pointer hover:bg-[#FEF5DD]/40">
+                  {compressingPhotos ? (
+                    <Loader2 className="w-5 h-5 mb-1 animate-spin" />
+                  ) : (
+                    <FolderOpen className="w-5 h-5 mb-1" />
+                  )}
+                  <span>Upload from Device</span>
+                  <span className="text-[10px] font-medium text-[#5B6474] mt-0.5">
+                    PC / Phone Storage
+                  </span>
                   <input
                     type="file"
                     accept="image/*"
                     multiple
+                    disabled={compressingPhotos}
+                    onChange={handlePhotoUpload}
+                    className="hidden"
+                  />
+                </label>
+
+                <label className="h-28 rounded-xl border-2 border-dashed border-[#0B2A5B]/35 bg-[#FAF5EB] flex flex-col items-center justify-center p-2 text-center text-[#0B2A5B] text-[12px] font-bold cursor-pointer hover:bg-[#F1E8D6]/60">
+                  {compressingPhotos ? (
+                    <Loader2 className="w-5 h-5 mb-1 animate-spin" />
+                  ) : (
+                    <Camera className="w-5 h-5 mb-1 text-[#C9971C]" />
+                  )}
+                  <span>Take Photo</span>
+                  <span className="text-[10px] font-medium text-[#5B6474] mt-0.5">
+                    Phone Camera
+                  </span>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    capture="environment"
+                    disabled={compressingPhotos}
                     onChange={handlePhotoUpload}
                     className="hidden"
                   />

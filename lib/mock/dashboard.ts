@@ -145,6 +145,13 @@ export interface MaintenanceQuotation {
   amount: number;
 }
 
+export interface StoredPhoto {
+  id: string;
+  name: string;
+  dataUrl: string;
+  sizeKb?: number;
+}
+
 export interface MaintenanceTicket {
   id: string;
   ticketNo: string;
@@ -167,7 +174,7 @@ export interface MaintenanceTicket {
   description?: string;
   attachmentsLabel?: string;
   quotations?: MaintenanceQuotation[];
-  photos?: string[];
+  photos?: Array<string | StoredPhoto>;
   blockHall?: boolean;
   blockDateISO?: string;
   blockFrom?: string;

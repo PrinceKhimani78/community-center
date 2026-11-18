@@ -3,12 +3,20 @@
 import React, { Suspense, useMemo, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { ClipboardCheck, Plus, Search } from "lucide-react";
+import { ClipboardCheck, Image as ImageIcon, Plus, Search, X } from "lucide-react";
 import { useDashboard } from "@/lib/context/DashboardContext";
-import type { MaintenanceTicket } from "@/lib/mock/dashboard";
+import type { MaintenanceTicket, StoredPhoto } from "@/lib/mock/dashboard";
 import PageShell from "@/components/common/PageShell";
 import StatusBadge from "@/components/common/StatusBadge";
 import PropertyInspectionView from "@/components/features/PropertyInspectionView";
+
+function getStoredPhotos(photos?: Array<string | StoredPhoto>): StoredPhoto[] {
+  if (!Array.isArray(photos)) return [];
+  return photos.filter(
+    (p): p is StoredPhoto =>
+      typeof p === "object" && p !== null && typeof p.dataUrl === "string" && p.dataUrl.startsWith("data:image/")
+  );
+}
 
 const STATUS_TABS: Array<"All" | MaintenanceTicket["status"]> = [
   "All",
@@ -33,12 +41,15 @@ function MaintenanceContent() {
   const searchParams = useSearchParams();
   const tabParam = searchParams.get("tab");
 
-  const { role, tickets, updateTicketStatus } = useDashboard();
+  const { role, bookings, tickets, updateTicketStatus } = useDashboard();
   const isAdmin = role === "admin";
+  const defaultInspectionReceipt =
+    bookings.find((b) => b.status !== "Cancelled")?.receiptNo || bookings[0]?.receiptNo || "1056";
 
   const [query, setQuery] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("All");
   const [statusFilter, setStatusFilter] = useState<"All" | MaintenanceTicket["status"]>("All");
+  const [previewPhoto, setPreviewPhoto] = useState<StoredPhoto | null>(null);
 
   const baseFiltered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -72,7 +83,7 @@ function MaintenanceContent() {
   }, [baseFiltered, statusFilter]);
 
   if (tabParam === "check") {
-    return <PropertyInspectionView initialBookingId="1048" />;
+    return <PropertyInspectionView initialBookingId={defaultInspectionReceipt} />;
   }
 
   return (
@@ -90,7 +101,7 @@ function MaintenanceContent() {
           </div>
 
           <Link
-            href="/inspections/1048"
+            href={`/inspections/${defaultInspectionReceipt}`}
             style={{ minHeight: "40px" }}
             className="interactive-btn px-4 py-2 rounded-xl bg-white border border-[#EFE4CC] text-[#0B2A5B] text-[13px] font-bold inline-flex items-center gap-1.5"
           >
@@ -190,6 +201,20 @@ function MaintenanceContent() {
                   {t.subCategory ? ` › ${t.subCategory}` : ""} · {t.location}
                 </div>
               )}
+              {getStoredPhotos(t.photos).length > 0 && (
+                <div className="flex items-center gap-2 overflow-x-auto py-1">
+                  {getStoredPhotos(t.photos).map((ph) => (
+                    <button
+                      key={ph.id}
+                      type="button"
+                      onClick={() => setPreviewPhoto(ph)}
+                      className="w-12 h-12 rounded-lg overflow-hidden border border-[#E5D9BF] shrink-0 cursor-pointer"
+                    >
+                      <img src={ph.dataUrl} alt={ph.name} className="w-full h-full object-cover" />
+                    </button>
+                  ))}
+                </div>
+              )}
               <div className="flex items-center justify-between pt-1.5 border-t border-[#F1ECE1] text-[12.5px]">
                 <span className="notranslate font-bold text-[#0B2A5B]">
                   ₹{t.estimatedCost.toLocaleString("en-IN")}
@@ -253,10 +278,40 @@ function MaintenanceContent() {
                         ₹{t.estimatedCost.toLocaleString("en-IN")}
                       </td>
                       <td className="py-3.5 px-3 text-[#5B6474]">
-                        {t.attachmentsLabel ||
-                          (t.quotations?.length
-                            ? `${t.quotations.length} quotation(s)`
-                            : "—")}
+                        <div className="space-y-1.5">
+                          <div className="text-[12px]">
+                            {t.attachmentsLabel ||
+                              (t.quotations?.length
+                                ? `${t.quotations.length} quotation(s)`
+                                : "—")}
+                          </div>
+                          {getStoredPhotos(t.photos).length > 0 && (
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              {getStoredPhotos(t.photos)
+                                .slice(0, 3)
+                                .map((ph) => (
+                                  <button
+                                    key={ph.id}
+                                    type="button"
+                                    onClick={() => setPreviewPhoto(ph)}
+                                    title={ph.name}
+                                    className="w-9 h-9 rounded-lg overflow-hidden border border-[#E5D9BF] hover:border-[#0B2A5B] cursor-pointer shrink-0"
+                                  >
+                                    <img
+                                      src={ph.dataUrl}
+                                      alt={ph.name}
+                                      className="w-full h-full object-cover"
+                                    />
+                                  </button>
+                                ))}
+                              {getStoredPhotos(t.photos).length > 3 && (
+                                <span className="text-[11px] font-bold text-[#0B2A5B] inline-flex items-center gap-0.5">
+                                  <ImageIcon className="w-3 h-3" />+{getStoredPhotos(t.photos).length - 3}
+                                </span>
+                              )}
+                            </div>
+                          )}
+                        </div>
                       </td>
                       <td className="py-3.5 px-3 text-[12.5px] text-[#5B6474]">
                         <div>{t.dateLabel}</div>
@@ -265,7 +320,7 @@ function MaintenanceContent() {
                       <td className="py-3.5 px-5 text-right whitespace-nowrap">
                         <div className="inline-flex items-center gap-2">
                           <StatusBadge status={t.status} />
-                          {t.status === "Pending" && (
+                          {t.status === "Pending" && isAdmin && (
                             <button
                               type="button"
                               onClick={() => updateTicketStatus(t.id, "Approved")}
@@ -302,6 +357,45 @@ function MaintenanceContent() {
           </div>
         </div>
       </div>
+
+      {previewPhoto && (
+        <div
+          onClick={() => setPreviewPhoto(null)}
+          className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="bg-white rounded-2xl overflow-hidden max-w-2xl w-full shadow-2xl"
+          >
+            <div className="px-4 py-3 border-b border-[#EFE4CC] flex items-center justify-between gap-2">
+              <div className="min-w-0">
+                <div className="font-bold text-[#0B2A5B] text-[14px] truncate">
+                  {previewPhoto.name}
+                </div>
+                {previewPhoto.sizeKb ? (
+                  <div className="text-[11.5px] text-[#5B6474]">
+                    {previewPhoto.sizeKb} KB (compressed in DB)
+                  </div>
+                ) : null}
+              </div>
+              <button
+                type="button"
+                onClick={() => setPreviewPhoto(null)}
+                className="w-8 h-8 rounded-full bg-[#FAF5EB] text-[#0B2A5B] flex items-center justify-center cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="bg-[#0B1220] flex items-center justify-center max-h-[75vh] overflow-auto">
+              <img
+                src={previewPhoto.dataUrl}
+                alt={previewPhoto.name}
+                className="max-w-full max-h-[75vh] object-contain"
+              />
+            </div>
+          </div>
+        </div>
+      )}
     </PageShell>
   );
 }

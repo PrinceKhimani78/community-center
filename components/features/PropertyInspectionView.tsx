@@ -1,18 +1,39 @@
 "use client";
 
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { AlertCircle, Camera, Check, CheckCircle2, Upload } from "lucide-react";
+import {
+  AlertCircle,
+  Camera,
+  Check,
+  CheckCircle2,
+  FolderOpen,
+  Loader2,
+  Trash2,
+  X,
+} from "lucide-react";
 import { useDashboard } from "@/lib/context/DashboardContext";
 import PageShell from "@/components/common/PageShell";
 import { formatBookingCode } from "@/lib/utils/bookings";
+import { compressImageFiles } from "@/lib/utils/imageCompression";
+
+interface InspectionPhoto {
+  id: string;
+  bookingReceiptNo: string;
+  mode: "Before Event" | "After Event";
+  label: string;
+  isIssue: boolean;
+  dataUrl: string;
+  sizeKb: number;
+  uploadedBy?: string;
+}
 
 interface PropertyInspectionViewProps {
   initialBookingId?: string;
 }
 
 export default function PropertyInspectionView({
-  initialBookingId = "1048",
+  initialBookingId = "",
 }: PropertyInspectionViewProps) {
   const {
     bookings,
@@ -23,44 +44,190 @@ export default function PropertyInspectionView({
     saveInspectionToDepositRefund,
   } = useDashboard();
 
+  const activeBookings = useMemo(
+    () => bookings.filter((b) => b.status !== "Cancelled"),
+    [bookings]
+  );
+
   const [selectedBookingNo, setSelectedBookingNo] = useState<string>(() => {
-    const match = bookings.find(
+    const match = activeBookings.find(
       (b) => b.receiptNo === initialBookingId || b.id === initialBookingId
     );
-    return match?.receiptNo || bookings[0]?.receiptNo || "1048";
+    return match?.receiptNo || activeBookings[0]?.receiptNo || initialBookingId || "";
   });
 
-  const [uploadedPhotos, setUploadedPhotos] = useState<Array<{ id: string; label: string; isIssue: boolean }>>([
-    { id: "ph-b1", label: "Seating area (Before)", isIssue: false },
-    { id: "ph-b2", label: "Stage wall (Before)", isIssue: false },
-  ]);
+  // Sync selected booking when bootstrap finishes hydrating real DB bookings
+  useEffect(() => {
+    if (activeBookings.length === 0) return;
+    const exists = activeBookings.some((b) => b.receiptNo === selectedBookingNo);
+    if (!exists) {
+      const initialMatch = activeBookings.find(
+        (b) => b.receiptNo === initialBookingId || b.id === initialBookingId
+      );
+      setSelectedBookingNo(initialMatch?.receiptNo || activeBookings[0].receiptNo);
+    }
+  }, [activeBookings, selectedBookingNo, initialBookingId]);
+
+  const [uploadedPhotos, setUploadedPhotos] = useState<InspectionPhoto[]>([]);
+  const [loadingPhotos, setLoadingPhotos] = useState(false);
+  const [compressing, setCompressing] = useState(false);
+  const [uploadNotice, setUploadNotice] = useState<string | null>(null);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const [previewPhoto, setPreviewPhoto] = useState<InspectionPhoto | null>(null);
   const [savedToRefund, setSavedToRefund] = useState(false);
 
   const booking = useMemo(
-    () => bookings.find((b) => b.receiptNo === selectedBookingNo) || bookings[0],
-    [bookings, selectedBookingNo]
+    () =>
+      activeBookings.find((b) => b.receiptNo === selectedBookingNo) ||
+      activeBookings[0] ||
+      bookings[0],
+    [activeBookings, bookings, selectedBookingNo]
   );
+
+  // Fetch stored inspection photos from MariaDB whenever booking changes
+  useEffect(() => {
+    if (!booking?.receiptNo) return;
+    let cancelled = false;
+    setLoadingPhotos(true);
+    setUploadError(null);
+
+    fetch(`/api/inspections/${encodeURIComponent(booking.receiptNo)}/photos`, {
+      cache: "no-store",
+    })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (!cancelled && Array.isArray(data?.photos)) {
+          setUploadedPhotos(data.photos);
+        }
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (!cancelled) setLoadingPhotos(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [booking?.receiptNo]);
 
   const okCount = hallCheckItems.filter((i) => i.status === "OK").length;
   const issueItems = hallCheckItems.filter((i) => i.status === "Issue");
   const totalDeduction = issueItems.reduce((sum, i) => sum + (i.issueCost || 0), 0);
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const beforePhotos = useMemo(
+    () => uploadedPhotos.filter((p) => p.mode === "Before Event"),
+    [uploadedPhotos]
+  );
+  const afterPhotos = useMemo(
+    () => uploadedPhotos.filter((p) => p.mode === "After Event"),
+    [uploadedPhotos]
+  );
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
-    if (!files || files.length === 0) return;
-    const added = Array.from(files).map((f, idx) => ({
-      id: `up-${Date.now()}-${idx}`,
-      label: `${f.name} (${hallCheckMode})`,
-      isIssue: hallCheckMode === "After Event" && issueItems.length > 0,
-    }));
-    setUploadedPhotos((prev) => [...prev, ...added]);
-    e.target.value = "";
+    if (!files || files.length === 0 || !booking) return;
+
+    setCompressing(true);
+    setUploadError(null);
+    setUploadNotice(null);
+
+    try {
+      const compressed = await compressImageFiles(files, {
+        maxDimension: 1200,
+        initialQuality: 0.74,
+        targetMaxKb: 180,
+      });
+
+      if (compressed.length === 0) {
+        setUploadError("Please select valid image files (JPG, PNG, WebP).");
+        return;
+      }
+
+      const payloadPhotos = compressed.map((c) => ({
+        label: c.name,
+        mode: hallCheckMode,
+        isIssue: hallCheckMode === "After Event" && issueItems.length > 0,
+        dataUrl: c.dataUrl,
+        sizeKb: c.sizeKb,
+      }));
+
+      // Optimistic local preview
+      const optimistic: InspectionPhoto[] = compressed.map((c) => ({
+        id: c.id,
+        bookingReceiptNo: booking.receiptNo,
+        mode: hallCheckMode,
+        label: c.name,
+        isIssue: hallCheckMode === "After Event" && issueItems.length > 0,
+        dataUrl: c.dataUrl,
+        sizeKb: c.sizeKb,
+      }));
+      setUploadedPhotos((prev) => [...optimistic, ...prev]);
+
+      const totalOrigKb = compressed.reduce((s, c) => s + c.originalSizeKb, 0);
+      const totalCompKb = compressed.reduce((s, c) => s + c.sizeKb, 0);
+
+      const res = await fetch(
+        `/api/inspections/${encodeURIComponent(booking.receiptNo)}/photos`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ photos: payloadPhotos }),
+        }
+      );
+      const data = await res.json().catch(() => null);
+
+      if (res.ok && Array.isArray(data?.photos)) {
+        setUploadedPhotos(data.photos);
+        setUploadNotice(
+          `Saved ${compressed.length} photo${compressed.length > 1 ? "s" : ""} to DB (compressed ${totalOrigKb} KB → ${totalCompKb} KB).`
+        );
+      } else if (!res.ok) {
+        setUploadError(data?.message || "Could not save photo to database.");
+      } else {
+        setUploadNotice(
+          `Compressed ${compressed.length} photo${compressed.length > 1 ? "s" : ""} (${totalOrigKb} KB → ${totalCompKb} KB).`
+        );
+      }
+    } catch {
+      setUploadError("Could not process image. Please try another photo.");
+    } finally {
+      setCompressing(false);
+      e.target.value = "";
+    }
+  };
+
+  const handleDeletePhoto = async (photoId: string) => {
+    setUploadedPhotos((prev) => prev.filter((p) => p.id !== photoId));
+    if (previewPhoto?.id === photoId) setPreviewPhoto(null);
+    await fetch(`/api/inspections/photos/${encodeURIComponent(photoId)}`, {
+      method: "DELETE",
+    }).catch(() => {});
   };
 
   const handleSaveAndSend = () => {
+    if (!booking) return;
     saveInspectionToDepositRefund(booking.receiptNo, hallCheckMode);
     setSavedToRefund(true);
   };
+
+  if (!booking) {
+    return (
+      <PageShell hideHeader>
+        <div className="bg-white rounded-2xl border border-[#EFE4CC] p-8 text-center space-y-3">
+          <h1 className="text-[18px] font-bold text-[#0B2A5B]">No bookings available to inspect</h1>
+          <p className="text-[13px] text-[#5B6474]">
+            Create or confirm a hall booking first to run Before/After Event inspections.
+          </p>
+          <Link
+            href="/bookings"
+            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-[#0B2A5B] text-white text-[13px] font-semibold"
+          >
+            Go to Bookings
+          </Link>
+        </div>
+      </PageShell>
+    );
+  }
 
   return (
     <PageShell hideHeader>
@@ -77,22 +244,21 @@ export default function PropertyInspectionView({
           </div>
 
           <select
-            value={selectedBookingNo}
+            value={booking.receiptNo}
             onChange={(e) => {
               setSelectedBookingNo(e.target.value);
               setSavedToRefund(false);
+              setUploadNotice(null);
             }}
             style={{ minHeight: "42px" }}
             aria-label="Select booking to inspect"
             className="rounded-xl border border-[#EFE4CC] bg-white px-3.5 text-[13px] font-bold text-[#0B2A5B]"
           >
-            {bookings
-              .filter((b) => b.status !== "Cancelled")
-              .map((b) => (
-                <option key={b.id} value={b.receiptNo}>
-                  {formatBookingCode(b.receiptNo)} · {b.eventTitle} ({b.applicantName})
-                </option>
-              ))}
+            {activeBookings.map((b) => (
+              <option key={b.id} value={b.receiptNo}>
+                {formatBookingCode(b.receiptNo)} · {b.eventTitle} ({b.applicantName})
+              </option>
+            ))}
           </select>
         </div>
 
@@ -103,7 +269,8 @@ export default function PropertyInspectionView({
               {booking.eventTitle} · {booking.hall}
             </h2>
             <p className="text-[13px] text-[#5B6474] mt-0.5">
-              {booking.applicantName} · Event on {booking.dateLabel} · Inspector: Yakub Mansuri
+              {booking.applicantName} · Event on {booking.dateLabel} · Security Deposit: ₹
+              {booking.deposit.toLocaleString("en-IN")}
             </p>
           </div>
 
@@ -134,9 +301,9 @@ export default function PropertyInspectionView({
             <span className="inline-flex items-center gap-2">
               <CheckCircle2 className="w-4 h-4 shrink-0" />
               <span>
-                {hallCheckMode} inspection saved for{" "}
-                <span className="notranslate">{formatBookingCode(booking.receiptNo)}</span> and
-                synced with Deposit Refund.
+                {hallCheckMode} inspection saved to DB for{" "}
+                <span className="notranslate">{formatBookingCode(booking.receiptNo)}</span>
+                {hallCheckMode === "After Event" ? " and synced with Deposit Refund." : "."}
               </span>
             </span>
             <Link
@@ -154,7 +321,7 @@ export default function PropertyInspectionView({
           <section className="lg:col-span-7 bg-white rounded-2xl border border-[#EFE4CC] p-5 space-y-3.5 shadow-2xs">
             <div className="flex items-center justify-between gap-2">
               <h3 style={{ color: "#0B2A5B", fontSize: "16.5px", fontWeight: 700 }}>
-                Standard Checklist
+                7-Point Standard Checklist
               </h3>
               <span
                 className={`text-[13px] font-extrabold ${
@@ -279,74 +446,176 @@ export default function PropertyInspectionView({
           <div className="lg:col-span-5 space-y-5">
             {/* Before & After Photos */}
             <section className="bg-white rounded-2xl border border-[#EFE4CC] p-5 space-y-3.5 shadow-2xs">
-              <div className="flex items-center justify-between gap-2">
-                <h3 style={{ color: "#0B2A5B", fontSize: "16px", fontWeight: 700 }}>
-                  Before & After Photos
-                </h3>
-                <label className="px-3.5 py-1.5 rounded-xl bg-white border border-[#0B2A5B]/30 text-[#0B2A5B] text-[12.5px] font-bold inline-flex items-center gap-1.5 cursor-pointer hover:bg-[#FAF5EB]">
-                  <Upload className="w-3.5 h-3.5" />
-                  <span>Upload</span>
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <h3 style={{ color: "#0B2A5B", fontSize: "16px", fontWeight: 700 }}>
+                    Before & After Photos
+                  </h3>
+                  <p className="text-[11.5px] text-[#5B6474]">
+                    Adding to: <span className="font-bold text-[#0B2A5B]">{hallCheckMode}</span> ·
+                    Auto-compressed for DB
+                  </p>
+                </div>
+              </div>
+
+              {/* Dual Upload Controls: PC/Phone Local Storage + Phone Camera */}
+              <div className="grid grid-cols-2 gap-2.5">
+                <label className="px-3 py-2.5 rounded-xl bg-[#FAF5EB] border border-[#E2B544] text-[#0B2A5B] text-[12.5px] font-bold inline-flex items-center justify-center gap-1.5 cursor-pointer hover:bg-[#FEF5DD]/70 transition-colors">
+                  {compressing ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <FolderOpen className="w-4 h-4 text-[#C9971C]" />
+                  )}
+                  <span>Device / Gallery</span>
                   <input
                     type="file"
                     accept="image/*"
                     multiple
+                    disabled={compressing}
+                    onChange={handleFileChange}
+                    className="hidden"
+                  />
+                </label>
+
+                <label className="px-3 py-2.5 rounded-xl bg-[#0B2A5B] text-white text-[12.5px] font-bold inline-flex items-center justify-center gap-1.5 cursor-pointer hover:bg-[#071E47] transition-colors">
+                  {compressing ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <Camera className="w-4 h-4 text-[#E2B544]" />
+                  )}
+                  <span>Take Photo</span>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    capture="environment"
+                    disabled={compressing}
                     onChange={handleFileChange}
                     className="hidden"
                   />
                 </label>
               </div>
 
-              <div className="grid grid-cols-2 gap-3 text-[12px]">
-                <div className="space-y-2">
-                  <div className="font-semibold text-[#5B6474]">
-                    Before · {booking.dateLabel}
-                  </div>
-                  {uploadedPhotos.slice(0, 2).map((ph) => (
-                    <div
-                      key={ph.id}
-                      className="h-24 rounded-xl bg-[#EEF2EB] border border-[#D5DEC8] flex flex-col items-center justify-center p-2 text-center text-[#5B6474]"
-                    >
-                      <Camera className="w-4 h-4 mb-1 opacity-70" />
-                      <span className="truncate w-full font-medium">{ph.label}</span>
-                    </div>
-                  ))}
+              {uploadNotice && (
+                <div className="px-3 py-2 rounded-xl bg-emerald-50 border border-emerald-200 text-[#15803D] text-[12px] font-semibold">
+                  {uploadNotice}
                 </div>
+              )}
 
-                <div className="space-y-2">
-                  <div className="font-semibold text-[#5B6474]">
-                    After · Post-event
-                  </div>
-                  {issueItems.length > 0 ? (
-                    issueItems.slice(0, 2).map((iss) => (
-                      <div
-                        key={iss.id}
-                        className="h-24 rounded-xl bg-[#FEF2F2] border-2 border-[#C62828]/70 flex flex-col items-center justify-center p-2 text-center text-[#C62828]"
-                      >
-                        <Camera className="w-4 h-4 mb-1" />
-                        <span className="truncate w-full font-bold">
-                          {iss.note || iss.label}
-                        </span>
+              {uploadError && (
+                <div className="px-3 py-2 rounded-xl bg-red-50 border border-red-200 text-[#C62828] text-[12px] font-semibold">
+                  {uploadError}
+                </div>
+              )}
+
+              {loadingPhotos ? (
+                <div className="py-6 text-center text-[12.5px] text-[#5B6474] inline-flex items-center justify-center gap-2 w-full">
+                  <Loader2 className="w-4 h-4 animate-spin text-[#0B2A5B]" />
+                  <span>Loading saved photos from database...</span>
+                </div>
+              ) : (
+                <div className="grid grid-cols-2 gap-3 text-[12px]">
+                  {/* BEFORE COLUMN */}
+                  <div className="space-y-2">
+                    <div className="font-semibold text-[#5B6474] flex items-center justify-between">
+                      <span>Before · {booking.dateLabel}</span>
+                      <span className="text-[11px] font-bold text-[#0B2A5B]">
+                        {beforePhotos.length}
+                      </span>
+                    </div>
+                    {beforePhotos.length === 0 ? (
+                      <div className="h-24 rounded-xl bg-[#FAF7F2] border border-dashed border-[#DFD2B7] flex flex-col items-center justify-center p-2 text-center text-[#5B6474]">
+                        <Camera className="w-4 h-4 mb-1 opacity-60" />
+                        <span className="text-[11px]">No before photos</span>
                       </div>
-                    ))
-                  ) : (
-                    <div className="h-24 rounded-xl bg-[#ECFDF5] border border-[#BBF7D0] flex flex-col items-center justify-center p-2 text-center text-[#15803D]">
-                      <CheckCircle2 className="w-4 h-4 mb-1" />
-                      <span className="font-semibold">All clear</span>
-                    </div>
-                  )}
-                </div>
-              </div>
+                    ) : (
+                      beforePhotos.map((ph) => (
+                        <div
+                          key={ph.id}
+                          className="group relative h-24 rounded-xl overflow-hidden border border-[#D5DEC8] bg-[#EEF2EB]"
+                        >
+                          <img
+                            src={ph.dataUrl}
+                            alt={ph.label}
+                            onClick={() => setPreviewPhoto(ph)}
+                            className="w-full h-full object-cover cursor-pointer"
+                          />
+                          <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/75 via-black/40 to-transparent px-2 py-1 flex items-center justify-between gap-1 text-[10px] text-white">
+                            <span className="truncate font-medium">{ph.label}</span>
+                            <span className="shrink-0 opacity-90">{ph.sizeKb} KB</span>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => handleDeletePhoto(ph.id)}
+                            aria-label={`Remove ${ph.label}`}
+                            className="absolute top-1.5 right-1.5 w-6 h-6 rounded-full bg-black/65 text-white flex items-center justify-center hover:bg-[#C62828] cursor-pointer"
+                          >
+                            <Trash2 className="w-3 h-3" />
+                          </button>
+                        </div>
+                      ))
+                    )}
+                  </div>
 
-              {uploadedPhotos.length > 2 && (
-                <div className="flex flex-wrap gap-1.5 pt-1">
-                  {uploadedPhotos.slice(2).map((ph) => (
-                    <span
-                      key={ph.id}
-                      className="px-2.5 py-1 rounded-full bg-[#FAF5EB] border border-[#EFE4CC] text-[11.5px] font-semibold text-[#0B2A5B]"
-                    >
-                      {ph.label}
-                    </span>
-                  ))}
+                  {/* AFTER COLUMN */}
+                  <div className="space-y-2">
+                    <div className="font-semibold text-[#5B6474] flex items-center justify-between">
+                      <span>After · Post-event</span>
+                      <span className="text-[11px] font-bold text-[#0B2A5B]">
+                        {afterPhotos.length}
+                      </span>
+                    </div>
+                    {afterPhotos.length === 0 ? (
+                      <div
+                        className={`h-24 rounded-xl border flex flex-col items-center justify-center p-2 text-center ${
+                          issueItems.length > 0
+                            ? "bg-[#FEF2F2] border-dashed border-[#FECACA] text-[#C62828]"
+                            : "bg-[#ECFDF5] border-[#BBF7D0] text-[#15803D]"
+                        }`}
+                      >
+                        {issueItems.length > 0 ? (
+                          <>
+                            <Camera className="w-4 h-4 mb-1" />
+                            <span className="text-[11px] font-semibold">
+                              Upload damage proof
+                            </span>
+                          </>
+                        ) : (
+                          <>
+                            <CheckCircle2 className="w-4 h-4 mb-1" />
+                            <span className="font-semibold text-[11.5px]">All clear</span>
+                          </>
+                        )}
+                      </div>
+                    ) : (
+                      afterPhotos.map((ph) => (
+                        <div
+                          key={ph.id}
+                          className={`group relative h-24 rounded-xl overflow-hidden border-2 ${
+                            ph.isIssue ? "border-[#C62828]/80" : "border-[#D5DEC8]"
+                          } bg-[#FAF7F2]`}
+                        >
+                          <img
+                            src={ph.dataUrl}
+                            alt={ph.label}
+                            onClick={() => setPreviewPhoto(ph)}
+                            className="w-full h-full object-cover cursor-pointer"
+                          />
+                          <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/75 via-black/40 to-transparent px-2 py-1 flex items-center justify-between gap-1 text-[10px] text-white">
+                            <span className="truncate font-medium">{ph.label}</span>
+                            <span className="shrink-0 opacity-90">{ph.sizeKb} KB</span>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => handleDeletePhoto(ph.id)}
+                            aria-label={`Remove ${ph.label}`}
+                            className="absolute top-1.5 right-1.5 w-6 h-6 rounded-full bg-black/65 text-white flex items-center justify-center hover:bg-[#C62828] cursor-pointer"
+                          >
+                            <Trash2 className="w-3 h-3" />
+                          </button>
+                        </div>
+                      ))
+                    )}
+                  </div>
                 </div>
               )}
             </section>
@@ -404,13 +673,52 @@ export default function PropertyInspectionView({
                 }}
                 className="interactive-btn w-full text-[13.5px] font-bold cursor-pointer"
               >
-                Save & Send to Deposit Refund
+                {hallCheckMode === "Before Event"
+                  ? "Save Before-Event Inspection"
+                  : "Save & Send to Deposit Refund"}
               </button>
             </section>
           </div>
         </div>
       </div>
+
+      {/* Lightbox Modal for Full-Size Image Preview */}
+      {previewPhoto && (
+        <div
+          onClick={() => setPreviewPhoto(null)}
+          className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="bg-white rounded-2xl overflow-hidden max-w-2xl w-full shadow-2xl"
+          >
+            <div className="px-4 py-3 border-b border-[#EFE4CC] flex items-center justify-between gap-2">
+              <div className="min-w-0">
+                <div className="font-bold text-[#0B2A5B] text-[14px] truncate">
+                  {previewPhoto.label}
+                </div>
+                <div className="text-[11.5px] text-[#5B6474]">
+                  {previewPhoto.mode} · {previewPhoto.sizeKb} KB (compressed in DB)
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setPreviewPhoto(null)}
+                className="w-8 h-8 rounded-full bg-[#FAF5EB] text-[#0B2A5B] flex items-center justify-center cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="bg-[#0B1220] flex items-center justify-center max-h-[75vh] overflow-auto">
+              <img
+                src={previewPhoto.dataUrl}
+                alt={previewPhoto.label}
+                className="max-w-full max-h-[75vh] object-contain"
+              />
+            </div>
+          </div>
+        </div>
+      )}
     </PageShell>
   );
 }
-
