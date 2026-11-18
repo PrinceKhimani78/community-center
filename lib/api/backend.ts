@@ -48,6 +48,7 @@ export async function backendFetch<T = Record<string, unknown>>(
   }
 
   const headers: Record<string, string> = {
+    Accept: "application/json",
     "Content-Type": "application/json",
   };
   if (options.token) {
@@ -61,14 +62,44 @@ export async function backendFetch<T = Record<string, unknown>>(
     cache: "no-store",
   });
 
+  const rawText = await res.text();
   let data: T;
+  let parsedOk = true;
   try {
-    data = (await res.json()) as T;
+    data = JSON.parse(rawText) as T;
   } catch {
-    data = { success: false, message: "Invalid JSON response from backend" } as T;
+    parsedOk = false;
+    const contentType = res.headers.get("content-type") || "unknown";
+    const titleMatch = rawText.match(/<title[^>]*>([^<]{1,120})<\/title>/i);
+    const htmlTitle = titleMatch ? titleMatch[1].trim() : "";
+    let host = baseUrl;
+    try {
+      host = new URL(baseUrl).host;
+    } catch {
+      // keep raw baseUrl
+    }
+    console.error("[backendFetch] Non-JSON response from backend", {
+      host,
+      path,
+      status: res.status,
+      contentType,
+      htmlTitle,
+      snippet: rawText.slice(0, 240).replace(/\s+/g, " "),
+    });
+    const detail = htmlTitle
+      ? `Backend returned "${htmlTitle}" (HTTP ${res.status}) instead of JSON.`
+      : `Backend returned non-JSON (${contentType}, HTTP ${res.status}).`;
+    data = {
+      success: false,
+      message: `${detail} Check cPanel firewall/WebShield or BACKEND_API_URL.`,
+    } as T;
   }
 
-  return { ok: res.ok, status: res.status, data };
+  return {
+    ok: parsedOk && res.ok,
+    status: parsedOk ? res.status : res.ok ? 502 : res.status,
+    data,
+  };
 }
 
 export async function proxyBackendJson(
