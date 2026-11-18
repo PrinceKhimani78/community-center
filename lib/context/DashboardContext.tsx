@@ -163,25 +163,26 @@ interface DashboardContextType {
     amount: number;
     mode: PaymentMode;
     reference: string;
-  }) => PaymentRecord | null;
-  addExpense: (input: Omit<ExpenseRecord, "id" | "dateLabel" | "status">) => void;
-  processRefund: (refundId: string, deductionAmount?: number, note?: string) => void;
+  }) => Promise<PaymentRecord | null>;
+  addExpense: (input: Omit<ExpenseRecord, "id" | "dateLabel" | "status">) => Promise<ExpenseRecord>;
+  processRefund: (refundId: string, deductionAmount?: number, note?: string) => Promise<void>;
   updateDepositRefund: (
     refundId: string,
     updates: Partial<Omit<DepositRefundRecord, "id">>
-  ) => void;
+  ) => Promise<DepositRefundRecord | null>;
   sendPaymentReminders: (count: number) => void;
   addMaintenanceTicket: (
     input: Omit<MaintenanceTicket, "id" | "ticketNo" | "raisedBy" | "dateLabel" | "status"> & {
       status?: MaintenanceTicket["status"];
     }
-  ) => MaintenanceTicket;
-  updateTicketStatus: (ticketId: string, status: MaintenanceTicket["status"]) => void;
+  ) => Promise<MaintenanceTicket>;
+  updateTicketStatus: (ticketId: string, status: MaintenanceTicket["status"]) => Promise<void>;
   setHallCheckItemStatus: (itemId: string, status: "OK" | "Issue", issueCost?: number, note?: string) => void;
   saveInspectionToDepositRefund: (
     bookingReceiptNo: string,
-    mode: "Before Event" | "After Event"
-  ) => void;
+    mode: "Before Event" | "After Event",
+    itemsOverride?: HallCheckItem[]
+  ) => Promise<void>;
   toggleMyCheckIn: (geo?: GeoCheckPayload, overrideReason?: string) => Promise<void>;
   addAdminAlert: (input: AdminAlertInput) => void;
   decideApproval: (approvalId: string, decision: "Approved" | "Rejected") => void;
@@ -816,17 +817,60 @@ export function DashboardProvider({
   );
 
   const recordPayment = useCallback(
-    (input: {
+    async (input: {
       bookingId: string;
       type: PaymentRecord["type"];
       amount: number;
       mode: PaymentMode;
       reference: string;
-    }) => {
+    }): Promise<PaymentRecord | null> => {
       const target = bookings.find((b) => b.id === input.bookingId || b.receiptNo === input.bookingId);
-      if (!target || input.amount <= 0) return null;
+      if (!target || input.amount <= 0) {
+        throw new Error("Please select a valid booking and enter a positive payment amount.");
+      }
 
-      const nextReceiptNo = `REC-2026-${1060 + payments.length}`;
+      const dateLabel = new Date().toLocaleDateString("en-IN", {
+        day: "2-digit",
+        month: "short",
+        year: "numeric",
+      });
+      const reference = input.reference || `${input.mode.toUpperCase()}-${target.receiptNo}`;
+
+      const res = await fetch("/api/payments", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          bookingId: target.id,
+          type: input.type,
+          amount: input.amount,
+          mode: input.mode,
+          reference,
+          dateLabel,
+        }),
+      });
+      const payload = await res.json().catch(() => null);
+      if (!res.ok) {
+        throw new Error(payload?.message || `Could not record payment (HTTP ${res.status}).`);
+      }
+
+      if (payload?.payment) {
+        const serverPay: PaymentRecord = payload.payment;
+        setPayments((prev) => [serverPay, ...prev]);
+        if (!payload.pendingApproval) {
+          setBookings((prev) =>
+            prev.map((b) =>
+              b.id === target.id || b.receiptNo === target.receiptNo
+                ? { ...b, paid: b.paid + serverPay.amount }
+                : b
+            )
+          );
+        }
+        void refreshBootstrap();
+        return serverPay;
+      }
+
+      // Offline demo fallback (only when BACKEND_API_URL is not configured)
+      const nextReceiptNo = `REC-${new Date().getFullYear()}-${1060 + payments.length}`;
       const newPay: PaymentRecord = {
         id: `pay-${Date.now()}`,
         receiptNo: nextReceiptNo,
@@ -837,62 +881,36 @@ export function DashboardProvider({
         type: input.type,
         amount: input.amount,
         mode: input.mode,
-        reference: input.reference || `${input.mode.toUpperCase()}-${target.receiptNo}`,
-        dateLabel: new Date().toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }),
+        reference,
+        dateLabel,
       };
-
       setPayments((prev) => [newPay, ...prev]);
       setBookings((prev) =>
-        prev.map((b) => {
-          if (b.id !== target.id && b.receiptNo !== target.receiptNo) return b;
-          const updatedPaid = b.paid + input.amount;
-          return {
-            ...b,
-            paid: updatedPaid,
-          };
-        })
+        prev.map((b) =>
+          b.id === target.id || b.receiptNo === target.receiptNo
+            ? { ...b, paid: b.paid + input.amount }
+            : b
+        )
       );
-
       appendLog(
         "Payment",
         `Collected ₹${input.amount.toLocaleString("en-IN")} (${input.mode})`,
         `Receipt ${nextReceiptNo} for ${target.applicantName}`
       );
-
-      fetch("/api/payments", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          bookingId: target.id,
-          type: input.type,
-          amount: input.amount,
-          mode: input.mode,
-          reference: newPay.reference,
-          dateLabel: newPay.dateLabel,
-        }),
-      })
-        .then((res) => {
-          if (res.ok) refreshBootstrap();
-        })
-        .catch(() => {});
-
       return newPay;
     },
     [bookings, payments.length, appendLog, refreshBootstrap]
   );
 
   const addExpense = useCallback(
-    (input: Omit<ExpenseRecord, "id" | "dateLabel" | "status">) => {
-      const created: ExpenseRecord = {
-        ...input,
-        id: `exp-${Date.now()}`,
-        dateLabel: new Date().toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }),
-        status: role === "admin" ? "Approved" : "Pending",
-      };
-      setExpenses((prev) => [created, ...prev]);
-      appendLog("Payment", `Added expense ₹${created.amount.toLocaleString("en-IN")}`, created.title);
+    async (input: Omit<ExpenseRecord, "id" | "dateLabel" | "status">): Promise<ExpenseRecord> => {
+      const dateLabel = new Date().toLocaleDateString("en-IN", {
+        day: "2-digit",
+        month: "short",
+        year: "numeric",
+      });
 
-      fetch("/api/expenses", {
+      const res = await fetch("/api/expenses", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -900,20 +918,64 @@ export function DashboardProvider({
           category: input.category,
           amount: input.amount,
           paidTo: input.paidTo,
-          dateLabel: created.dateLabel,
+          dateLabel,
         }),
-      })
-        .then((res) => {
-          if (res.ok) refreshBootstrap();
-        })
-        .catch(() => {});
+      });
+      const payload = await res.json().catch(() => null);
+      if (!res.ok) {
+        throw new Error(payload?.message || `Could not save expense (HTTP ${res.status}).`);
+      }
+
+      if (payload?.expense) {
+        const serverExpense: ExpenseRecord = payload.expense;
+        setExpenses((prev) => [serverExpense, ...prev]);
+        void refreshBootstrap();
+        return serverExpense;
+      }
+
+      const created: ExpenseRecord = {
+        ...input,
+        id: `exp-${Date.now()}`,
+        dateLabel,
+        status: role === "admin" ? "Approved" : "Pending",
+      };
+      setExpenses((prev) => [created, ...prev]);
+      appendLog("Payment", `Added expense ₹${created.amount.toLocaleString("en-IN")}`, created.title);
+      return created;
     },
     [role, appendLog, refreshBootstrap]
   );
 
   const processRefund = useCallback(
-    (refundId: string, deductionAmount = 0, note = "") => {
+    async (refundId: string, deductionAmount = 0, note = ""): Promise<void> => {
       const nextStatus = role === "admin" ? "Refunded" : "Sent for Approval";
+      const res = await fetch(`/api/deposit-refunds/${encodeURIComponent(refundId)}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          deductionAmount,
+          deductionNote: note,
+          status: nextStatus,
+        }),
+      });
+      const payload = await res.json().catch(() => null);
+      if (!res.ok) {
+        throw new Error(payload?.message || `Could not update deposit refund (HTTP ${res.status}).`);
+      }
+
+      if (payload?.depositRefund) {
+        const serverRefund: DepositRefundRecord = payload.depositRefund;
+        setRefunds((prev) =>
+          prev.map((r) =>
+            r.id === serverRefund.id || r.bookingReceiptNo === serverRefund.bookingReceiptNo
+              ? serverRefund
+              : r
+          )
+        );
+        void refreshBootstrap();
+        return;
+      }
+
       setRefunds((prev) =>
         prev.map((r) =>
           r.id === refundId || r.bookingReceiptNo === refundId
@@ -931,26 +993,38 @@ export function DashboardProvider({
         role === "admin" ? "Refunded security deposit" : "Sent deposit refund for approval",
         `Refund ID ${refundId}`
       );
-
-      fetch(`/api/deposit-refunds/${encodeURIComponent(refundId)}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          deductionAmount,
-          deductionNote: note,
-          status: nextStatus,
-        }),
-      })
-        .then((res) => {
-          if (res.ok) refreshBootstrap();
-        })
-        .catch(() => {});
     },
     [role, appendLog, refreshBootstrap]
   );
 
   const updateDepositRefund = useCallback(
-    (refundId: string, updates: Partial<Omit<DepositRefundRecord, "id">>) => {
+    async (
+      refundId: string,
+      updates: Partial<Omit<DepositRefundRecord, "id">>
+    ): Promise<DepositRefundRecord | null> => {
+      const res = await fetch(`/api/deposit-refunds/${encodeURIComponent(refundId)}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(updates),
+      });
+      const payload = await res.json().catch(() => null);
+      if (!res.ok) {
+        throw new Error(payload?.message || `Could not update deposit refund (HTTP ${res.status}).`);
+      }
+
+      if (payload?.depositRefund) {
+        const serverRefund: DepositRefundRecord = payload.depositRefund;
+        setRefunds((prev) =>
+          prev.map((r) =>
+            r.id === serverRefund.id || r.bookingReceiptNo === serverRefund.bookingReceiptNo
+              ? serverRefund
+              : r
+          )
+        );
+        void refreshBootstrap();
+        return serverRefund;
+      }
+
       setRefunds((prev) =>
         prev.map((r) => (r.id === refundId || r.bookingReceiptNo === refundId ? { ...r, ...updates } : r))
       );
@@ -961,16 +1035,7 @@ export function DashboardProvider({
           `Refund ID ${refundId}`
         );
       }
-
-      fetch(`/api/deposit-refunds/${encodeURIComponent(refundId)}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(updates),
-      })
-        .then((res) => {
-          if (res.ok) refreshBootstrap();
-        })
-        .catch(() => {});
+      return null;
     },
     [appendLog, refreshBootstrap]
   );
@@ -987,18 +1052,40 @@ export function DashboardProvider({
   );
 
   const addMaintenanceTicket = useCallback(
-    (
+    async (
       input: Omit<MaintenanceTicket, "id" | "ticketNo" | "raisedBy" | "dateLabel" | "status"> & {
         status?: MaintenanceTicket["status"];
       }
-    ) => {
+    ): Promise<MaintenanceTicket> => {
+      const ticketStatus: MaintenanceTicket["status"] = input.status || "Pending";
+
+      const res = await fetch("/api/tickets", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ...input,
+          status: ticketStatus,
+        }),
+      });
+      const payload = await res.json().catch(() => null);
+      if (!res.ok) {
+        throw new Error(payload?.message || `Could not save maintenance request (HTTP ${res.status}).`);
+      }
+
+      if (payload?.ticket) {
+        const serverTicket: MaintenanceTicket = payload.ticket;
+        setTickets((prev) => [serverTicket, ...prev]);
+        void refreshBootstrap();
+        return serverTicket;
+      }
+
+      // Offline demo fallback (only when BACKEND_API_URL is not configured)
       const maxNo = tickets.reduce((max, t) => {
         const num = parseInt(t.ticketNo.split("-").pop() || "0", 10);
         return Number.isFinite(num) && num > max ? num : max;
       }, 114);
       const nextNo = `MC-${new Date().getFullYear()}-${String(maxNo + 1).padStart(4, "0")}`;
       const actor = role === "admin" ? "Admin" : "Manager";
-      const ticketStatus: MaintenanceTicket["status"] = input.status || "Pending";
       const dateLabel = new Date().toLocaleDateString("en-IN", {
         day: "2-digit",
         month: "short",
@@ -1013,68 +1100,46 @@ export function DashboardProvider({
         status: ticketStatus,
       };
       setTickets((prev) => [created, ...prev]);
-
-      if (ticketStatus !== "Draft" && created.estimatedCost > 2000) {
-        setApprovals((prev) => [
-          {
-            id: `apr-${Date.now()}`,
-            type: "Repair Cost",
-            title: created.title,
-            detail: `${created.location} · ${created.category}`,
-            amountLabel: `₹${created.estimatedCost.toLocaleString("en-IN")}`,
-            requester: actor,
-            referenceNo: nextNo,
-            status: "Pending",
-          },
-          ...prev,
-        ]);
-      }
-
       appendLog(
         "Maintenance",
         ticketStatus === "Draft" ? `Saved draft ${nextNo}` : `Raised ticket ${nextNo}`,
         created.title
       );
-
-      fetch("/api/tickets", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          ...input,
-          status: ticketStatus,
-        }),
-      })
-        .then((res) => {
-          if (res.ok) void refreshBootstrap();
-        })
-        .catch(() => {});
-
       return created;
     },
     [tickets, role, appendLog, refreshBootstrap]
   );
 
   const updateTicketStatus = useCallback(
-    (ticketId: string, status: MaintenanceTicket["status"]) => {
-      setTickets((prev) => prev.map((t) => (t.id === ticketId ? { ...t, status } : t)));
-      appendLog("Maintenance", `Updated repair ticket to ${status}`, ticketId);
-
-      fetch(`/api/tickets/${encodeURIComponent(ticketId)}`, {
+    async (ticketId: string, status: MaintenanceTicket["status"]): Promise<void> => {
+      const res = await fetch(`/api/tickets/${encodeURIComponent(ticketId)}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ status }),
-      })
-        .then((res) => {
-          if (res.ok) void refreshBootstrap();
-        })
-        .catch(() => {});
+      });
+      const payload = await res.json().catch(() => null);
+      if (!res.ok) {
+        throw new Error(payload?.message || `Could not update ticket status (HTTP ${res.status}).`);
+      }
+
+      if (payload?.ticket) {
+        const serverTicket: MaintenanceTicket = payload.ticket;
+        setTickets((prev) =>
+          prev.map((t) => (t.id === serverTicket.id || t.ticketNo === serverTicket.ticketNo ? serverTicket : t))
+        );
+        void refreshBootstrap();
+        return;
+      }
+
+      setTickets((prev) => prev.map((t) => (t.id === ticketId ? { ...t, status } : t)));
+      appendLog("Maintenance", `Updated repair ticket to ${status}`, ticketId);
     },
     [appendLog, refreshBootstrap]
   );
 
   const setHallCheckItemStatus = useCallback(
     (itemId: string, status: "OK" | "Issue", issueCost = 0, note = "") => {
-      const normalizedCost = status === "OK" ? 0 : issueCost;
+      const normalizedCost = status === "OK" ? 0 : Math.max(0, issueCost);
       const normalizedNote = status === "OK" ? "" : note;
       setHallCheckItems((prev) =>
         prev.map((item) =>
@@ -1088,30 +1153,72 @@ export function DashboardProvider({
             : item
         )
       );
-
-      fetch(`/api/hall-checks/${encodeURIComponent(itemId)}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          status,
-          issueCost: normalizedCost,
-          note: normalizedNote,
-        }),
-      }).catch(() => {});
     },
     []
   );
 
   const saveInspectionToDepositRefund = useCallback(
-    (bookingReceiptNo: string, mode: "Before Event" | "After Event") => {
-      const issues = hallCheckItems.filter((i) => i.status === "Issue");
-      const totalDeduction = issues.reduce((sum, i) => sum + (i.issueCost || 0), 0);
+    async (
+      bookingReceiptNo: string,
+      mode: "Before Event" | "After Event",
+      itemsOverride?: HallCheckItem[]
+    ): Promise<void> => {
+      const itemsToSave = itemsOverride || hallCheckItems;
+
+      const res = await fetch("/api/hall-checks/save-to-refund", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          bookingReceiptNo,
+          mode,
+          items: itemsToSave,
+        }),
+      });
+      const payload = await res.json().catch(() => null);
+      if (!res.ok) {
+        throw new Error(payload?.message || `Could not save inspection (HTTP ${res.status}).`);
+      }
+
+      if (payload?.booking) {
+        const serverBooking: BookingRecord = payload.booking;
+        setBookings((prev) =>
+          prev.map((b) =>
+            b.id === serverBooking.id || b.receiptNo === serverBooking.receiptNo ? serverBooking : b
+          )
+        );
+      }
+
+      if (payload?.depositRefund) {
+        const serverRefund: DepositRefundRecord = payload.depositRefund;
+        setRefunds((prev) => {
+          const exists = prev.some(
+            (r) => r.id === serverRefund.id || r.bookingReceiptNo === serverRefund.bookingReceiptNo
+          );
+          if (exists) {
+            return prev.map((r) =>
+              r.id === serverRefund.id || r.bookingReceiptNo === serverRefund.bookingReceiptNo
+                ? serverRefund
+                : r
+            );
+          }
+          return [serverRefund, ...prev];
+        });
+      }
+
+      if (payload?.booking || payload?.depositRefund) {
+        void refreshBootstrap();
+        return;
+      }
+
+      // Offline demo fallback
+      const issues = itemsToSave.filter((i) => i.status === "Issue");
+      const totalDeduction = issues.reduce((sum, i) => sum + Math.max(0, i.issueCost || 0), 0);
       const deductionItems = issues.map((i) => ({
         id: `ded-${i.id}`,
         item: i.note ? `${i.label} (${i.note})` : i.label,
         location: "Community Hall",
-        photosCount: 1,
-        amount: i.issueCost || 0,
+        photosCount: 0,
+        amount: Math.max(0, i.issueCost || 0),
       }));
       const deductionNote =
         issues.length > 0
@@ -1150,7 +1257,6 @@ export function DashboardProvider({
                 : r
             );
           }
-
           const targetBooking = bookings.find(
             (b) => b.receiptNo === bookingReceiptNo || b.id === bookingReceiptNo
           );
@@ -1177,26 +1283,11 @@ export function DashboardProvider({
           ];
         });
       }
-
       appendLog(
         "Maintenance",
         `Saved ${mode} inspection for #${bookingReceiptNo}`,
         `${issues.length} issue(s) · Total deduction ₹${totalDeduction.toLocaleString("en-IN")}`
       );
-
-      fetch("/api/hall-checks/save-to-refund", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          bookingReceiptNo,
-          mode,
-          items: hallCheckItems,
-        }),
-      })
-        .then((res) => {
-          if (res.ok) void refreshBootstrap();
-        })
-        .catch(() => {});
     },
     [hallCheckItems, bookings, appendLog, refreshBootstrap]
   );

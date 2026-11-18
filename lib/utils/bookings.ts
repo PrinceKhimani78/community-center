@@ -146,6 +146,7 @@ export function getHallDateConflict(
   const maintenanceClash = tickets.find(
     (t) =>
       t.blockHall &&
+      (t.status === "Approved" || t.status === "In Progress") &&
       t.blockDateISO === dateISO &&
       hallsConflict(t.location, hall)
   );

@@ -212,6 +212,7 @@ export default function NewBookingForm({
       const maintenanceClash = tickets.find(
         (t) =>
           t.blockHall &&
+          (t.status === "Approved" || t.status === "In Progress") &&
           t.blockDateISO &&
           hallsConflict(t.location, optionHall) &&
           isDateInRange(t.blockDateISO, dateISO, effectiveEndISO)

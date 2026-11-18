@@ -72,6 +72,8 @@ export default function NewMaintenanceRequestPage() {
   const [blockTo, setBlockTo] = useState("5:00 PM");
 
   const [savedTicket, setSavedTicket] = useState<MaintenanceTicket | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
 
   const lowestQuoteAmount = useMemo(() => {
     if (quotations.length === 0) return null;
@@ -146,27 +148,37 @@ export default function NewMaintenanceRequestPage() {
     setPhotos((prev) => prev.filter((p) => p.id !== photoId));
   };
 
-  const handleSave = (asDraft: boolean) => {
-    const resolvedTitle =
-      title.trim() || `${category} (${subCategory}) issue in ${location}`;
-    const created = addMaintenanceTicket({
-      title: resolvedTitle,
-      category,
-      subCategory,
-      location,
-      priority,
-      estimatedCost: Number(estimatedCost || 0),
-      description: description.trim(),
-      quotations,
-      photos,
-      attachmentsLabel: `${quotations.length} quotation(s), ${photos.length} photo(s)`,
-      blockHall,
-      blockDateISO: blockHall ? blockDateISO : undefined,
-      blockFrom: blockHall ? blockFrom : undefined,
-      blockTo: blockHall ? blockTo : undefined,
-      status: asDraft ? "Draft" : "Pending",
-    });
-    setSavedTicket(created);
+  const handleSave = async (asDraft: boolean) => {
+    setFormError(null);
+    setIsSaving(true);
+    try {
+      const resolvedTitle =
+        title.trim() || `${category} (${subCategory}) issue in ${location}`;
+      const created = await addMaintenanceTicket({
+        title: resolvedTitle,
+        category,
+        subCategory,
+        location,
+        priority,
+        estimatedCost: Math.max(0, Number(estimatedCost || 0)),
+        description: description.trim(),
+        quotations,
+        photos,
+        attachmentsLabel: `${quotations.length} quotation(s), ${photos.length} photo(s)`,
+        blockHall,
+        blockDateISO: blockHall ? blockDateISO : undefined,
+        blockFrom: blockHall ? blockFrom : undefined,
+        blockTo: blockHall ? blockTo : undefined,
+        status: asDraft ? "Draft" : "Pending",
+      });
+      setSavedTicket(created);
+    } catch (err) {
+      setFormError(
+        err instanceof Error ? err.message : "Could not save maintenance request."
+      );
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   if (savedTicket) {
@@ -659,25 +671,33 @@ export default function NewMaintenanceRequestPage() {
               </div>
             </section>
 
+            {formError && (
+              <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-[#C62828] text-[12.5px] font-semibold">
+                {formError}
+              </div>
+            )}
+
             <button
               type="button"
-              onClick={() => handleSave(false)}
+              disabled={isSaving || compressingPhotos}
+              onClick={() => void handleSave(false)}
               style={{
                 minHeight: "46px",
                 background: "linear-gradient(135deg, #071E47 0%, #0B2A5B 100%)",
                 color: "#FFFFFF",
                 borderRadius: "12px",
               }}
-              className="interactive-btn w-full text-[13.5px] font-bold cursor-pointer"
+              className="interactive-btn w-full text-[13.5px] font-bold cursor-pointer disabled:opacity-50"
             >
-              Submit for Approval
+              {isSaving ? "Submitting..." : "Submit for Approval"}
             </button>
 
             <button
               type="button"
-              onClick={() => handleSave(true)}
+              disabled={isSaving || compressingPhotos}
+              onClick={() => void handleSave(true)}
               style={{ minHeight: "44px" }}
-              className="interactive-btn w-full rounded-xl bg-white border border-[#0B2A5B]/30 text-[#0B2A5B] text-[13.5px] font-bold cursor-pointer"
+              className="interactive-btn w-full rounded-xl bg-white border border-[#0B2A5B]/30 text-[#0B2A5B] text-[13.5px] font-bold cursor-pointer disabled:opacity-50"
             >
               Save as Draft
             </button>

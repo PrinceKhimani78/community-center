@@ -85,6 +85,7 @@ function DepositRefundInner({ currentRefund }: { currentRefund: DepositRefundRec
   const [upiOrAccount, setUpiOrAccount] = useState(currentRefund.upiOrAccount || "");
   const [remarks, setRemarks] = useState(currentRefund.remarks || "");
   const [actionMsg, setActionMsg] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
 
   const items: DepositDeductionItem[] = useMemo(
     () => currentRefund.deductionItems || [],
@@ -139,60 +140,92 @@ function DepositRefundInner({ currentRefund }: { currentRefund: DepositRefundRec
     ];
   }, [currentRefund, totalDeductions]);
 
-  const handleAddDeduction = (e: React.FormEvent) => {
+  const handleAddDeduction = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!dedItem.trim()) return;
+    setActionError(null);
+    const amountNum = Math.round(Number(dedAmount || 0));
+    if (amountNum < 0) {
+      setActionError("Deduction amount cannot be negative.");
+      return;
+    }
     const nextItems: DepositDeductionItem[] = [
       ...items,
       {
         id: `ded-${Date.now()}`,
         item: dedItem.trim(),
         location: dedLocation.trim() || "Ground Floor",
-        photosCount: Number(dedPhotos || 1),
-        amount: Number(dedAmount || 0),
+        photosCount: Math.max(0, Number(dedPhotos || 0)),
+        amount: amountNum,
       },
     ];
     const nextTotal = nextItems.reduce((s, d) => s + d.amount, 0);
-    updateDepositRefund(currentRefund.id, {
-      deductionItems: nextItems,
-      deductionAmount: nextTotal,
-      deductionNote: nextItems.map((i) => i.item).join(", "),
-    });
-    setDedItem("");
-    setShowAddDeduction(false);
+    if (nextTotal > currentRefund.heldAmount) {
+      setActionError(
+        `Total deduction (₹${nextTotal.toLocaleString("en-IN")}) cannot exceed held deposit (₹${currentRefund.heldAmount.toLocaleString("en-IN")}).`
+      );
+      return;
+    }
+    try {
+      await updateDepositRefund(currentRefund.id, {
+        deductionItems: nextItems,
+        deductionAmount: nextTotal,
+        deductionNote: nextItems.map((i) => i.item).join(", "),
+      });
+      setDedItem("");
+      setShowAddDeduction(false);
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : "Could not add deduction.");
+    }
   };
 
-  const handleRemoveDeduction = (dedId: string) => {
+  const handleRemoveDeduction = async (dedId: string) => {
+    setActionError(null);
     const nextItems = items.filter((d) => d.id !== dedId);
     const nextTotal = nextItems.reduce((s, d) => s + d.amount, 0);
-    updateDepositRefund(currentRefund.id, {
-      deductionItems: nextItems,
-      deductionAmount: nextTotal,
-      deductionNote: nextItems.length
-        ? nextItems.map((i) => i.item).join(", ")
-        : "No deductions",
-    });
+    try {
+      await updateDepositRefund(currentRefund.id, {
+        deductionItems: nextItems,
+        deductionAmount: nextTotal,
+        deductionNote: nextItems.length
+          ? nextItems.map((i) => i.item).join(", ")
+          : "No deductions",
+      });
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : "Could not remove deduction.");
+    }
   };
 
-  const handleSubmitSettlement = () => {
+  const handleSubmitSettlement = async () => {
+    setActionError(null);
+    setActionMsg(null);
     const nextStatus = role === "admin" ? "Refunded" : "Sent for Approval";
-    updateDepositRefund(currentRefund.id, {
-      refundMode,
-      upiOrAccount: upiOrAccount.trim(),
-      remarks: remarks.trim(),
-      deductionAmount: totalDeductions,
-      status: nextStatus,
-    });
-    setActionMsg(
-      nextStatus === "Refunded"
-        ? `Approved & refunded ₹${refundAmount.toLocaleString("en-IN")} via ${refundMode}.`
-        : `Sent ₹${refundAmount.toLocaleString("en-IN")} refund settlement for Admin approval.`
-    );
+    try {
+      await updateDepositRefund(currentRefund.id, {
+        refundMode,
+        upiOrAccount: upiOrAccount.trim(),
+        remarks: remarks.trim(),
+        deductionAmount: totalDeductions,
+        status: nextStatus,
+      });
+      setActionMsg(
+        nextStatus === "Refunded"
+          ? `Approved & refunded ₹${refundAmount.toLocaleString("en-IN")} via ${refundMode}.`
+          : `Sent ₹${refundAmount.toLocaleString("en-IN")} refund settlement for Admin approval.`
+      );
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : "Could not update refund settlement.");
+    }
   };
 
   return (
     <PageShell hideHeader>
       <div className="space-y-5">
+        {actionError && (
+          <div className="p-3.5 rounded-xl bg-red-50 border border-red-200 text-[#C62828] text-[13px] font-semibold">
+            {actionError}
+          </div>
+        )}
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <div className="text-[12px] font-medium text-[#5B6474]">

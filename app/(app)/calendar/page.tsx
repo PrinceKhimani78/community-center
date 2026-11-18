@@ -90,6 +90,7 @@ export default function CalendarPage() {
     });
     const dayBlocks = tickets.filter((t) => {
       if (!t.blockHall || t.blockDateISO !== iso) return false;
+      if (t.status !== "Approved" && t.status !== "In Progress") return false;
       return hallFilter === "All" || hallsConflict(t.location, hallFilter);
     });
     return { dayBookings, dayBlocks };
@@ -128,23 +129,33 @@ export default function CalendarPage() {
     setSelectedDateISO(getTodayISO());
   };
 
-  const handleSaveBlock = (e: React.FormEvent) => {
+  const handleSaveBlock = async (e: React.FormEvent) => {
     e.preventDefault();
-    const ticket = addMaintenanceTicket({
-      title: blockReason.trim() || `Maintenance block — ${blockLocation}`,
-      category: "AC / Fans",
-      location: blockLocation,
-      priority: "Normal",
-      estimatedCost: 0,
-      blockHall: true,
-      blockDateISO,
-    });
-    setBlockReason("");
-    setBlockSavedMsg(`Blocked ${blockLocation} on ${blockDateISO} (${ticket.ticketNo}).`);
-    setSelectedDateISO(blockDateISO);
-    const d = new Date(`${blockDateISO}T00:00:00`);
-    setCursorYear(d.getFullYear());
-    setCursorMonth(d.getMonth());
+    try {
+      const ticket = await addMaintenanceTicket({
+        title: blockReason.trim() || `Maintenance block — ${blockLocation}`,
+        category: "AC / Fans",
+        location: blockLocation,
+        priority: "Normal",
+        estimatedCost: 0,
+        blockHall: true,
+        blockDateISO,
+      });
+      setBlockReason("");
+      setBlockSavedMsg(
+        ticket.status === "Approved"
+          ? `Blocked ${blockLocation} on ${blockDateISO} (${ticket.ticketNo}).`
+          : `Hall block request ${ticket.ticketNo} submitted for Admin approval before blocking ${blockDateISO}.`
+      );
+      setSelectedDateISO(blockDateISO);
+      const d = new Date(`${blockDateISO}T00:00:00`);
+      setCursorYear(d.getFullYear());
+      setCursorMonth(d.getMonth());
+    } catch (err) {
+      setBlockSavedMsg(
+        err instanceof Error ? err.message : "Could not save maintenance block."
+      );
+    }
   };
 
   return (

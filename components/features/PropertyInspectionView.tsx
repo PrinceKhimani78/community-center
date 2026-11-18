@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import {
   AlertCircle,
@@ -13,6 +13,7 @@ import {
   X,
 } from "lucide-react";
 import { useDashboard } from "@/lib/context/DashboardContext";
+import type { HallCheckItem } from "@/lib/mock/dashboard";
 import PageShell from "@/components/common/PageShell";
 import { formatBookingCode } from "@/lib/utils/bookings";
 import { compressImageFiles } from "@/lib/utils/imageCompression";
@@ -21,6 +22,7 @@ interface InspectionPhoto {
   id: string;
   bookingReceiptNo: string;
   mode: "Before Event" | "After Event";
+  checklistItemId?: string;
   label: string;
   isIssue: boolean;
   dataUrl: string;
@@ -39,8 +41,7 @@ export default function PropertyInspectionView({
     bookings,
     hallCheckMode,
     setHallCheckMode,
-    hallCheckItems,
-    setHallCheckItemStatus,
+    hallCheckItems: templateItems,
     saveInspectionToDepositRefund,
   } = useDashboard();
 
@@ -56,7 +57,6 @@ export default function PropertyInspectionView({
     return match?.receiptNo || activeBookings[0]?.receiptNo || initialBookingId || "";
   });
 
-  // Sync selected booking when bootstrap finishes hydrating real DB bookings
   useEffect(() => {
     if (activeBookings.length === 0) return;
     const exists = activeBookings.some((b) => b.receiptNo === selectedBookingNo);
@@ -68,14 +68,6 @@ export default function PropertyInspectionView({
     }
   }, [activeBookings, selectedBookingNo, initialBookingId]);
 
-  const [uploadedPhotos, setUploadedPhotos] = useState<InspectionPhoto[]>([]);
-  const [loadingPhotos, setLoadingPhotos] = useState(false);
-  const [compressing, setCompressing] = useState(false);
-  const [uploadNotice, setUploadNotice] = useState<string | null>(null);
-  const [uploadError, setUploadError] = useState<string | null>(null);
-  const [previewPhoto, setPreviewPhoto] = useState<InspectionPhoto | null>(null);
-  const [savedToRefund, setSavedToRefund] = useState(false);
-
   const booking = useMemo(
     () =>
       activeBookings.find((b) => b.receiptNo === selectedBookingNo) ||
@@ -84,12 +76,49 @@ export default function PropertyInspectionView({
     [activeBookings, bookings, selectedBookingNo]
   );
 
-  // Fetch stored inspection photos from MariaDB whenever booking changes
+  // Per-booking isolated 7-point checklist state
+  const [checkItems, setCheckItems] = useState<HallCheckItem[]>(() =>
+    templateItems.map((i) => ({ ...i, status: "OK", issueCost: 0, note: "" }))
+  );
+  const [loadingChecklist, setLoadingChecklist] = useState(false);
+
+  const [uploadedPhotos, setUploadedPhotos] = useState<InspectionPhoto[]>([]);
+  const [loadingPhotos, setLoadingPhotos] = useState(false);
+  const [compressing, setCompressing] = useState(false);
+  const [photoTagItemId, setPhotoTagItemId] = useState<string>("");
+  const [uploadNotice, setUploadNotice] = useState<string | null>(null);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const [previewPhoto, setPreviewPhoto] = useState<InspectionPhoto | null>(null);
+
+  const [savingInspection, setSavingInspection] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [savedToRefund, setSavedToRefund] = useState(false);
+
+  const patchTimersRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
+
+  // Fetch per-booking checklist AND photos from MariaDB whenever booking changes
   useEffect(() => {
     if (!booking?.receiptNo) return;
     let cancelled = false;
+    setLoadingChecklist(true);
     setLoadingPhotos(true);
     setUploadError(null);
+    setSaveError(null);
+    setSavedToRefund(false);
+
+    fetch(`/api/inspections/${encodeURIComponent(booking.receiptNo)}/checklist`, {
+      cache: "no-store",
+    })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (!cancelled && Array.isArray(data?.items) && data.items.length > 0) {
+          setCheckItems(data.items);
+        }
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (!cancelled) setLoadingChecklist(false);
+      });
 
     fetch(`/api/inspections/${encodeURIComponent(booking.receiptNo)}/photos`, {
       cache: "no-store",
@@ -98,6 +127,8 @@ export default function PropertyInspectionView({
       .then((data) => {
         if (!cancelled && Array.isArray(data?.photos)) {
           setUploadedPhotos(data.photos);
+        } else if (!cancelled) {
+          setUploadedPhotos([]);
         }
       })
       .catch(() => {})
@@ -110,9 +141,68 @@ export default function PropertyInspectionView({
     };
   }, [booking?.receiptNo]);
 
-  const okCount = hallCheckItems.filter((i) => i.status === "OK").length;
-  const issueItems = hallCheckItems.filter((i) => i.status === "Issue");
-  const totalDeduction = issueItems.reduce((sum, i) => sum + (i.issueCost || 0), 0);
+  const persistChecklistItem = (
+    receiptNo: string,
+    itemId: string,
+    status: "OK" | "Issue",
+    issueCost: number,
+    note: string,
+    debounceMs = 0
+  ) => {
+    const key = `${receiptNo}:${itemId}`;
+    if (patchTimersRef.current[key]) {
+      clearTimeout(patchTimersRef.current[key]);
+    }
+    const run = async () => {
+      try {
+        const res = await fetch(
+          `/api/inspections/${encodeURIComponent(receiptNo)}/checklist/${encodeURIComponent(itemId)}`,
+          {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ status, issueCost, note }),
+          }
+        );
+        if (!res.ok) {
+          const errPayload = await res.json().catch(() => null);
+          setSaveError(errPayload?.message || "Could not save checklist change.");
+        }
+      } catch {
+        setSaveError("Network error saving checklist item.");
+      }
+    };
+    if (debounceMs > 0) {
+      patchTimersRef.current[key] = setTimeout(() => void run(), debounceMs);
+    } else {
+      void run();
+    }
+  };
+
+  const updateCheckItem = (
+    itemId: string,
+    status: "OK" | "Issue",
+    rawCost = 0,
+    note = "",
+    debounceMs = 0
+  ) => {
+    if (!booking) return;
+    const safeCost = status === "OK" ? 0 : Math.max(0, Math.round(Number(rawCost) || 0));
+    const safeNote = status === "OK" ? "" : note;
+    setSaveError(null);
+    setCheckItems((prev) =>
+      prev.map((item) =>
+        item.id === itemId
+          ? { ...item, status, issueCost: safeCost, note: safeNote }
+          : item
+      )
+    );
+    persistChecklistItem(booking.receiptNo, itemId, status, safeCost, safeNote, debounceMs);
+  };
+
+  const okCount = checkItems.filter((i) => i.status === "OK").length;
+  const issueItems = checkItems.filter((i) => i.status === "Issue");
+  const totalDeduction = issueItems.reduce((sum, i) => sum + Math.max(0, i.issueCost || 0), 0);
+  const exceedsHeldDeposit = booking ? totalDeduction > booking.deposit : false;
 
   const beforePhotos = useMemo(
     () => uploadedPhotos.filter((p) => p.mode === "Before Event"),
@@ -143,25 +233,17 @@ export default function PropertyInspectionView({
         return;
       }
 
+      const linkedItemId =
+        hallCheckMode === "After Event" && photoTagItemId ? photoTagItemId : undefined;
+
       const payloadPhotos = compressed.map((c) => ({
         label: c.name,
         mode: hallCheckMode,
-        isIssue: hallCheckMode === "After Event" && issueItems.length > 0,
+        checklistItemId: linkedItemId,
+        isIssue: hallCheckMode === "After Event" && (Boolean(linkedItemId) || issueItems.length > 0),
         dataUrl: c.dataUrl,
         sizeKb: c.sizeKb,
       }));
-
-      // Optimistic local preview
-      const optimistic: InspectionPhoto[] = compressed.map((c) => ({
-        id: c.id,
-        bookingReceiptNo: booking.receiptNo,
-        mode: hallCheckMode,
-        label: c.name,
-        isIssue: hallCheckMode === "After Event" && issueItems.length > 0,
-        dataUrl: c.dataUrl,
-        sizeKb: c.sizeKb,
-      }));
-      setUploadedPhotos((prev) => [...optimistic, ...prev]);
 
       const totalOrigKb = compressed.reduce((s, c) => s + c.originalSizeKb, 0);
       const totalCompKb = compressed.reduce((s, c) => s + c.sizeKb, 0);
@@ -176,16 +258,15 @@ export default function PropertyInspectionView({
       );
       const data = await res.json().catch(() => null);
 
-      if (res.ok && Array.isArray(data?.photos)) {
+      if (!res.ok) {
+        setUploadError(data?.message || `Could not save photo to database (HTTP ${res.status}).`);
+        return;
+      }
+
+      if (Array.isArray(data?.photos)) {
         setUploadedPhotos(data.photos);
         setUploadNotice(
           `Saved ${compressed.length} photo${compressed.length > 1 ? "s" : ""} to DB (compressed ${totalOrigKb} KB → ${totalCompKb} KB).`
-        );
-      } else if (!res.ok) {
-        setUploadError(data?.message || "Could not save photo to database.");
-      } else {
-        setUploadNotice(
-          `Compressed ${compressed.length} photo${compressed.length > 1 ? "s" : ""} (${totalOrigKb} KB → ${totalCompKb} KB).`
         );
       }
     } catch {
@@ -197,17 +278,40 @@ export default function PropertyInspectionView({
   };
 
   const handleDeletePhoto = async (photoId: string) => {
+    const previous = uploadedPhotos;
     setUploadedPhotos((prev) => prev.filter((p) => p.id !== photoId));
     if (previewPhoto?.id === photoId) setPreviewPhoto(null);
-    await fetch(`/api/inspections/photos/${encodeURIComponent(photoId)}`, {
+
+    const res = await fetch(`/api/inspections/photos/${encodeURIComponent(photoId)}`, {
       method: "DELETE",
-    }).catch(() => {});
+    }).catch(() => null);
+    if (!res || !res.ok) {
+      setUploadedPhotos(previous);
+      setUploadError("Could not delete photo from database.");
+    }
   };
 
-  const handleSaveAndSend = () => {
+  const handleSaveAndSend = async () => {
     if (!booking) return;
-    saveInspectionToDepositRefund(booking.receiptNo, hallCheckMode);
-    setSavedToRefund(true);
+    setSaveError(null);
+    setSavedToRefund(false);
+
+    if (hallCheckMode === "After Event" && totalDeduction > booking.deposit) {
+      setSaveError(
+        `Total deduction (₹${totalDeduction.toLocaleString("en-IN")}) cannot exceed held security deposit (₹${booking.deposit.toLocaleString("en-IN")}).`
+      );
+      return;
+    }
+
+    setSavingInspection(true);
+    try {
+      await saveInspectionToDepositRefund(booking.receiptNo, hallCheckMode, checkItems);
+      setSavedToRefund(true);
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : "Could not save inspection.");
+    } finally {
+      setSavingInspection(false);
+    }
   };
 
   if (!booking) {
@@ -249,6 +353,8 @@ export default function PropertyInspectionView({
               setSelectedBookingNo(e.target.value);
               setSavedToRefund(false);
               setUploadNotice(null);
+              setSaveError(null);
+              setPhotoTagItemId("");
             }}
             style={{ minHeight: "42px" }}
             aria-label="Select booking to inspect"
@@ -284,6 +390,7 @@ export default function PropertyInspectionView({
                   onClick={() => {
                     setHallCheckMode(modeOpt);
                     setSavedToRefund(false);
+                    setSaveError(null);
                   }}
                   className={`px-4 py-2 rounded-lg text-[13px] font-bold cursor-pointer transition-all ${
                     active ? "bg-[#0B2A5B] text-white shadow-xs" : "text-[#14213D]"
@@ -295,6 +402,13 @@ export default function PropertyInspectionView({
             })}
           </div>
         </section>
+
+        {saveError && (
+          <div className="p-3.5 rounded-xl bg-red-50 border border-red-200 text-[#C62828] text-[13px] font-semibold flex items-center gap-2">
+            <AlertCircle className="w-4 h-4 shrink-0" />
+            <span>{saveError}</span>
+          </div>
+        )}
 
         {savedToRefund && (
           <div className="p-3.5 rounded-xl bg-emerald-50 border border-emerald-200 text-[#15803D] text-[13px] font-semibold flex flex-wrap items-center justify-between gap-2 animate-check-pop">
@@ -317,23 +431,23 @@ export default function PropertyInspectionView({
 
         {/* MAIN 2-COLUMN BODY */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
-          {/* LEFT 7 COLS — 7-POINT CHECKLIST */}
+          {/* LEFT 7 COLS — 7-POINT CHECKLIST (SCOPED PER BOOKING) */}
           <section className="lg:col-span-7 bg-white rounded-2xl border border-[#EFE4CC] p-5 space-y-3.5 shadow-2xs">
             <div className="flex items-center justify-between gap-2">
               <h3 style={{ color: "#0B2A5B", fontSize: "16.5px", fontWeight: 700 }}>
-                7-Point Standard Checklist
+                {checkItems.length}-Point Standard Checklist
               </h3>
               <span
                 className={`text-[13px] font-extrabold ${
-                  okCount === hallCheckItems.length ? "text-[#15803D]" : "text-[#C62828]"
+                  okCount === checkItems.length ? "text-[#15803D]" : "text-[#C62828]"
                 }`}
               >
-                {okCount} / {hallCheckItems.length} OK
+                {loadingChecklist ? "Loading..." : `${okCount} / ${checkItems.length} OK`}
               </span>
             </div>
 
             <div className="space-y-2.5">
-              {hallCheckItems.map((item) => {
+              {checkItems.map((item) => {
                 const isOk = item.status === "OK";
                 return (
                   <div
@@ -348,7 +462,7 @@ export default function PropertyInspectionView({
                       <button
                         type="button"
                         onClick={() =>
-                          setHallCheckItemStatus(
+                          updateCheckItem(
                             item.id,
                             isOk ? "Issue" : "OK",
                             isOk ? item.issueCost || 500 : 0,
@@ -381,7 +495,7 @@ export default function PropertyInspectionView({
                       <button
                         type="button"
                         onClick={() =>
-                          setHallCheckItemStatus(
+                          updateCheckItem(
                             item.id,
                             isOk ? "Issue" : "OK",
                             isOk ? item.issueCost || 500 : 0,
@@ -402,12 +516,7 @@ export default function PropertyInspectionView({
                           type="text"
                           value={item.note}
                           onChange={(e) =>
-                            setHallCheckItemStatus(
-                              item.id,
-                              "Issue",
-                              item.issueCost,
-                              e.target.value
-                            )
+                            updateCheckItem(item.id, "Issue", item.issueCost, e.target.value, 350)
                           }
                           placeholder="Describe issue (e.g. 2 chairs broken)"
                           className="sm:col-span-8 h-9 rounded-lg border border-[#FECACA] bg-white px-3 text-[12.5px] text-[#14213D]"
@@ -417,13 +526,15 @@ export default function PropertyInspectionView({
                           <input
                             type="number"
                             min={0}
+                            max={booking.deposit}
                             value={item.issueCost}
                             onChange={(e) =>
-                              setHallCheckItemStatus(
+                              updateCheckItem(
                                 item.id,
                                 "Issue",
-                                Number(e.target.value || 0),
-                                item.note
+                                Math.max(0, Number(e.target.value || 0)),
+                                item.note,
+                                350
                               )
                             }
                             aria-label={`Cost estimate for ${item.label}`}
@@ -438,7 +549,9 @@ export default function PropertyInspectionView({
             </div>
 
             <p className="text-[12px] text-[#5B6474] pt-1">
-              Click any item to toggle between OK and Issue, and enter custom damage costs if any.
+              Saved individually for{" "}
+              <span className="font-bold text-[#0B2A5B]">{formatBookingCode(booking.receiptNo)}</span>.
+              Click any item to toggle between OK and Issue.
             </p>
           </section>
 
@@ -457,6 +570,26 @@ export default function PropertyInspectionView({
                   </p>
                 </div>
               </div>
+
+              {hallCheckMode === "After Event" && issueItems.length > 0 && (
+                <div>
+                  <label className="block text-[11.5px] font-semibold text-[#5B6474] mb-1">
+                    Tag photo to flagged issue (optional)
+                  </label>
+                  <select
+                    value={photoTagItemId}
+                    onChange={(e) => setPhotoTagItemId(e.target.value)}
+                    className="w-full h-9 rounded-lg border border-[#EFE4CC] bg-[#FAF7F2] px-2.5 text-[12.5px] font-semibold text-[#0B2A5B]"
+                  >
+                    <option value="">General post-event photo</option>
+                    {issueItems.map((iss) => (
+                      <option key={iss.id} value={iss.id}>
+                        {iss.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
 
               {/* Dual Upload Controls: PC/Phone Local Storage + Phone Camera */}
               <div className="grid grid-cols-2 gap-2.5">
@@ -651,19 +784,28 @@ export default function PropertyInspectionView({
                 </div>
               )}
 
-              <div className="border-t border-[#F1ECE1] pt-3 flex items-center justify-between">
-                <span className="font-bold text-[#0B2A5B] text-[14px]">Total deduction</span>
-                <span
-                  className={`notranslate text-[18px] font-extrabold ${
-                    totalDeduction > 0 ? "text-[#C62828]" : "text-[#15803D]"
-                  }`}
-                >
-                  ₹{totalDeduction.toLocaleString("en-IN")}
-                </span>
+              <div className="border-t border-[#F1ECE1] pt-3 space-y-1">
+                <div className="flex items-center justify-between">
+                  <span className="font-bold text-[#0B2A5B] text-[14px]">Total deduction</span>
+                  <span
+                    className={`notranslate text-[18px] font-extrabold ${
+                      totalDeduction > 0 ? "text-[#C62828]" : "text-[#15803D]"
+                    }`}
+                  >
+                    ₹{totalDeduction.toLocaleString("en-IN")}
+                  </span>
+                </div>
+                {exceedsHeldDeposit && (
+                  <p className="text-[12px] font-semibold text-[#C62828]">
+                    Exceeds held deposit (₹{booking.deposit.toLocaleString("en-IN")}). Reduce
+                    deduction to continue.
+                  </p>
+                )}
               </div>
 
               <button
                 type="button"
+                disabled={savingInspection || (hallCheckMode === "After Event" && exceedsHeldDeposit)}
                 onClick={handleSaveAndSend}
                 style={{
                   minHeight: "46px",
@@ -671,9 +813,11 @@ export default function PropertyInspectionView({
                   color: "#FFFFFF",
                   borderRadius: "12px",
                 }}
-                className="interactive-btn w-full text-[13.5px] font-bold cursor-pointer"
+                className="interactive-btn w-full text-[13.5px] font-bold cursor-pointer disabled:opacity-50"
               >
-                {hallCheckMode === "Before Event"
+                {savingInspection
+                  ? "Saving..."
+                  : hallCheckMode === "Before Event"
                   ? "Save Before-Event Inspection"
                   : "Save & Send to Deposit Refund"}
               </button>

@@ -50,6 +50,16 @@ function MaintenanceContent() {
   const [categoryFilter, setCategoryFilter] = useState("All");
   const [statusFilter, setStatusFilter] = useState<"All" | MaintenanceTicket["status"]>("All");
   const [previewPhoto, setPreviewPhoto] = useState<StoredPhoto | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
+
+  const handleStatusChange = async (ticketId: string, nextStatus: MaintenanceTicket["status"]) => {
+    setActionError(null);
+    try {
+      await updateTicketStatus(ticketId, nextStatus);
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : "Could not update ticket status.");
+    }
+  };
 
   const baseFiltered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -109,6 +119,19 @@ function MaintenanceContent() {
             <span>Property Inspections</span>
           </Link>
         </div>
+
+        {actionError && (
+          <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-[#C62828] text-[13px] font-semibold flex items-center justify-between gap-2">
+            <span>{actionError}</span>
+            <button
+              type="button"
+              onClick={() => setActionError(null)}
+              className="text-[#C62828] hover:underline text-[12px] font-bold cursor-pointer"
+            >
+              Dismiss
+            </button>
+          </div>
+        )}
 
         {/* Search + Category + New Request Bar */}
         <div className="flex flex-wrap items-center gap-2.5">
@@ -323,7 +346,7 @@ function MaintenanceContent() {
                           {t.status === "Pending" && isAdmin && (
                             <button
                               type="button"
-                              onClick={() => updateTicketStatus(t.id, "Approved")}
+                              onClick={() => void handleStatusChange(t.id, "Approved")}
                               className="text-[11.5px] font-bold text-[#1D4ED8] hover:underline cursor-pointer"
                             >
                               Approve
@@ -332,7 +355,7 @@ function MaintenanceContent() {
                           {t.status === "Approved" && (
                             <button
                               type="button"
-                              onClick={() => updateTicketStatus(t.id, "In Progress")}
+                              onClick={() => void handleStatusChange(t.id, "In Progress")}
                               className="text-[11.5px] font-bold text-[#6D28D9] hover:underline cursor-pointer"
                             >
                               Start
@@ -341,7 +364,7 @@ function MaintenanceContent() {
                           {t.status === "In Progress" && (
                             <button
                               type="button"
-                              onClick={() => updateTicketStatus(t.id, "Completed")}
+                              onClick={() => void handleStatusChange(t.id, "Completed")}
                               className="text-[11.5px] font-bold text-[#15803D] hover:underline cursor-pointer"
                             >
                               Close

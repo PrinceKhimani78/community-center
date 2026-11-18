@@ -196,8 +196,12 @@ function PaymentsContent() {
     return payments.filter((p) => p.type !== "Security Deposit");
   }, [payments, paymentFilter]);
 
+  const [paymentError, setPaymentError] = useState<string | null>(null);
+  const [expenseError, setExpenseError] = useState<string | null>(null);
+
   const handleBookingChange = (nextId: string) => {
     setSelectedBookingId(nextId);
+    setPaymentError(null);
     const target = bookings.find((b) => b.id === nextId);
     if (target) {
       const due = getBookingBalance(target);
@@ -205,34 +209,44 @@ function PaymentsContent() {
     }
   };
 
-  const handleRecordPayment = (e: React.FormEvent) => {
+  const handleRecordPayment = async (e: React.FormEvent) => {
     e.preventDefault();
-    const rec = recordPayment({
-      bookingId: selectedBookingId,
-      type: payType,
-      amount: Number(amount),
-      mode,
-      reference,
-    });
-    if (rec) {
-      setSavedReceiptInfo({ receiptNo: rec.receiptNo, bookingNo: rec.bookingReceiptNo });
-      setReference("");
+    setPaymentError(null);
+    try {
+      const rec = await recordPayment({
+        bookingId: selectedBookingId,
+        type: payType,
+        amount: Number(amount),
+        mode,
+        reference,
+      });
+      if (rec) {
+        setSavedReceiptInfo({ receiptNo: rec.receiptNo, bookingNo: rec.bookingReceiptNo });
+        setReference("");
+      }
+    } catch (err) {
+      setPaymentError(err instanceof Error ? err.message : "Could not record payment.");
     }
   };
 
-  const handleExpenseSubmit = (e: React.FormEvent) => {
+  const handleExpenseSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!expTitle.trim()) return;
-    addExpense({
-      title: expTitle.trim(),
-      category: expCategory,
-      amount: Number(expAmount || 0),
-      paidTo: expPaidTo.trim() || "Local Vendor",
-    });
-    setExpTitle("");
-    setExpPaidTo("");
-    setShowExpenseForm(false);
-    setExpSaved(true);
+    setExpenseError(null);
+    try {
+      await addExpense({
+        title: expTitle.trim(),
+        category: expCategory,
+        amount: Number(expAmount || 0),
+        paidTo: expPaidTo.trim() || "Local Vendor",
+      });
+      setExpTitle("");
+      setExpPaidTo("");
+      setShowExpenseForm(false);
+      setExpSaved(true);
+    } catch (err) {
+      setExpenseError(err instanceof Error ? err.message : "Could not save expense.");
+    }
   };
 
   const handleSendReminders = () => {
@@ -258,7 +272,7 @@ function PaymentsContent() {
           </div>
 
           <Link
-            href="/deposits/1045"
+            href={`/deposits/${refunds[0]?.bookingReceiptNo || bookings[0]?.receiptNo || "1056"}`}
             style={{ minHeight: "40px" }}
             className="interactive-btn px-4 py-2 rounded-xl bg-white border border-[#EFE4CC] text-[#0B2A5B] text-[13px] font-bold inline-flex items-center gap-1.5"
           >
@@ -266,6 +280,22 @@ function PaymentsContent() {
             <ArrowRight className="w-3.5 h-3.5 text-[#C9971C]" />
           </Link>
         </div>
+
+        {(paymentError || expenseError) && (
+          <div className="p-3.5 rounded-xl bg-red-50 border border-red-200 text-[#C62828] text-[13px] font-semibold flex items-center justify-between gap-2">
+            <span>{paymentError || expenseError}</span>
+            <button
+              type="button"
+              onClick={() => {
+                setPaymentError(null);
+                setExpenseError(null);
+              }}
+              className="text-[12px] font-bold underline cursor-pointer shrink-0"
+            >
+              Dismiss
+            </button>
+          </div>
+        )}
 
         {/* Calendar / Date-wise KPI Filter */}
         <div className="bg-white rounded-2xl border border-[#EFE4CC] p-3 flex flex-wrap items-center justify-between gap-2.5">
