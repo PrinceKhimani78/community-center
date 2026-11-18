@@ -97,6 +97,7 @@ export interface SystemSettingsState {
   baseRentPerFloor: number;
   acSurchargePerFloor: number;
   defaultSecurityDeposit: number;
+  electricityRatePerUnit: number;
   maxUploadSizeMb: number;
   requireFreeUseAdminApproval: boolean;
   requireBookingAdminApproval: boolean;
@@ -112,6 +113,7 @@ export interface SystemSettingsState {
 interface DashboardContextType {
   role: "manager" | "admin";
   userId: string;
+  isHydrated: boolean;
   writeError: string | null;
   clearWriteError: () => void;
   actionItems: ActionItem[];
@@ -185,6 +187,15 @@ interface DashboardContextType {
     mode: "Before Event" | "After Event",
     itemsOverride?: HallCheckItem[]
   ) => Promise<void>;
+  updateBookingMeter: (
+    bookingReceiptNo: string,
+    input: {
+      openingUnit?: number;
+      closingUnit?: number;
+      electricityRatePerUnit?: number;
+      electricityWaived?: boolean;
+    }
+  ) => Promise<{ booking: BookingRecord; unitsConsumed: number | null; electricityCharge: number }>;
   toggleMyCheckIn: (geo?: GeoCheckPayload, overrideReason?: string) => Promise<void>;
   addAdminAlert: (input: AdminAlertInput) => void;
   decideApproval: (approvalId: string, decision: "Approved" | "Rejected") => Promise<void>;
@@ -314,6 +325,7 @@ export const DEFAULT_SYSTEM_SETTINGS: SystemSettingsState = {
   baseRentPerFloor: BASE_RENT_PER_FLOOR,
   acSurchargePerFloor: AC_SURCHARGE_PER_FLOOR,
   defaultSecurityDeposit: DEFAULT_SECURITY_DEPOSIT,
+  electricityRatePerUnit: 12,
   maxUploadSizeMb: 5,
   requireFreeUseAdminApproval: true,
   requireBookingAdminApproval: true,
@@ -358,6 +370,7 @@ export function DashboardProvider({
 }: DashboardProviderProps) {
   const [role] = useState<"manager" | "admin">(initialRole);
   const [userId] = useState<string>(initialUserId);
+  const [isHydrated, setIsHydrated] = useState(false);
   const [writeError, setWriteError] = useState<string | null>(null);
   const clearWriteError = useCallback(() => setWriteError(null), []);
   const [actionItems, setActionItems] = useState<ActionItem[]>(INITIAL_ACTION_ITEMS);
@@ -442,6 +455,8 @@ export function DashboardProvider({
       }
     } catch {
       // Fall back to local mock state when backend is unavailable
+    } finally {
+      setIsHydrated(true);
     }
   }, [role]);
 
@@ -460,7 +475,7 @@ export function DashboardProvider({
       if (document.visibilityState === "visible") {
         triggerRefresh();
       }
-    }, 10000);
+    }, 30000);
     window.addEventListener("focus", triggerRefresh);
     document.addEventListener("visibilitychange", handleVisibility);
 
@@ -1339,6 +1354,52 @@ export function DashboardProvider({
     [hallCheckItems, bookings, appendLog, refreshBootstrap]
   );
 
+  const updateBookingMeter = useCallback(
+    async (
+      bookingReceiptNo: string,
+      input: {
+        openingUnit?: number;
+        closingUnit?: number;
+        electricityRatePerUnit?: number;
+        electricityWaived?: boolean;
+      }
+    ): Promise<{ booking: BookingRecord; unitsConsumed: number | null; electricityCharge: number }> => {
+      const res = await fetch(`/api/inspections/${encodeURIComponent(bookingReceiptNo)}/meter`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(input),
+      });
+      const payload = await res.json().catch(() => null);
+      if (!res.ok) {
+        throw new Error(payload?.message || `Could not save meter reading (HTTP ${res.status}).`);
+      }
+
+      if (payload?.booking) {
+        const serverBooking: BookingRecord = payload.booking;
+        setBookings((prev) =>
+          prev.map((b) =>
+            b.id === serverBooking.id || b.receiptNo === serverBooking.receiptNo ? serverBooking : b
+          )
+        );
+        void refreshBootstrap();
+        return {
+          booking: serverBooking,
+          unitsConsumed: payload.unitsConsumed ?? null,
+          electricityCharge: Number(payload.electricityCharge || 0),
+        };
+      }
+
+      const fallback = bookings.find(
+        (b) => b.receiptNo === bookingReceiptNo || b.id === bookingReceiptNo
+      );
+      if (!fallback) {
+        throw new Error("Booking not found.");
+      }
+      return { booking: fallback, unitsConsumed: null, electricityCharge: 0 };
+    },
+    [bookings, refreshBootstrap]
+  );
+
   const toggleMyCheckIn = useCallback(
     async (geo?: GeoCheckPayload, overrideReason?: string) => {
       const now = getCurrentTimeLabel();
@@ -1861,6 +1922,7 @@ export function DashboardProvider({
       value={{
         role,
         userId,
+        isHydrated,
         writeError,
         clearWriteError,
         actionItems,
@@ -1907,6 +1969,7 @@ export function DashboardProvider({
         updateTicketStatus,
         setHallCheckItemStatus,
         saveInspectionToDepositRefund,
+        updateBookingMeter,
         toggleMyCheckIn,
         addAdminAlert,
         decideApproval,

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, useId } from "react";
 import { useRouter } from "next/navigation";
 import { User, Lock, Eye, EyeOff, ArrowRight, ShieldCheck } from "lucide-react";
 
@@ -11,6 +11,9 @@ interface LoginFormProps {
 
 export default function LoginForm({ className = "" }: LoginFormProps) {
   const router = useRouter();
+  const formUid = useId();
+  const userIdFieldId = `${formUid}-userId`;
+  const passwordFieldId = `${formUid}-password`;
   const userIdInputRef = useRef<HTMLInputElement>(null);
 
   const [userId, setUserId] = useState("");
@@ -248,7 +251,7 @@ export default function LoginForm({ className = "" }: LoginFormProps) {
         {/* User ID Field */}
         <div style={{ marginTop: "24px" }}>
           <label
-            htmlFor="userId"
+            htmlFor={userIdFieldId}
             style={{ color: "#061A3E", fontSize: "13px", fontWeight: 700 }}
             className="block mb-1.5"
           >
@@ -260,7 +263,7 @@ export default function LoginForm({ className = "" }: LoginFormProps) {
             </span>
             <input
               ref={userIdInputRef}
-              id="userId"
+              id={userIdFieldId}
               name="userId"
               type="text"
               autoComplete="username"
@@ -300,7 +303,7 @@ export default function LoginForm({ className = "" }: LoginFormProps) {
         {/* Password Field */}
         <div style={{ marginTop: "16px" }}>
           <label
-            htmlFor="password"
+            htmlFor={passwordFieldId}
             style={{ color: "#061A3E", fontSize: "13px", fontWeight: 700 }}
             className="block mb-1.5"
           >
@@ -311,7 +314,7 @@ export default function LoginForm({ className = "" }: LoginFormProps) {
               <Lock className="w-[18px] h-[18px]" aria-hidden="true" strokeWidth={1.8} />
             </span>
             <input
-              id="password"
+              id={passwordFieldId}
               name="password"
               type={showPassword ? "text" : "password"}
               autoComplete="current-password"

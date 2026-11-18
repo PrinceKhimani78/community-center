@@ -3,18 +3,32 @@
 import React, { Suspense, useMemo, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { ClipboardCheck, Image as ImageIcon, Plus, Search, X } from "lucide-react";
+import { ClipboardCheck, Image as ImageIcon, Loader2, Plus, Search, X } from "lucide-react";
 import { useDashboard } from "@/lib/context/DashboardContext";
 import type { MaintenanceTicket, StoredPhoto } from "@/lib/mock/dashboard";
 import PageShell from "@/components/common/PageShell";
 import StatusBadge from "@/components/common/StatusBadge";
 import PropertyInspectionView from "@/components/features/PropertyInspectionView";
 
-function getStoredPhotos(photos?: Array<string | StoredPhoto>): StoredPhoto[] {
+function getTicketPhotoCount(t: MaintenanceTicket): number {
+  if (typeof t.photoCount === "number") return t.photoCount;
+  if (!Array.isArray(t.photos)) return 0;
+  return t.photos.filter(
+    (p) =>
+      typeof p === "object" &&
+      p !== null &&
+      (Boolean(p.hasImage) || (typeof p.dataUrl === "string" && p.dataUrl.startsWith("data:image/")))
+  ).length;
+}
+
+function getInlinePhotos(photos?: Array<string | StoredPhoto>): StoredPhoto[] {
   if (!Array.isArray(photos)) return [];
   return photos.filter(
     (p): p is StoredPhoto =>
-      typeof p === "object" && p !== null && typeof p.dataUrl === "string" && p.dataUrl.startsWith("data:image/")
+      typeof p === "object" &&
+      p !== null &&
+      typeof p.dataUrl === "string" &&
+      p.dataUrl.startsWith("data:image/")
   );
 }
 
@@ -49,8 +63,52 @@ function MaintenanceContent() {
   const [query, setQuery] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("All");
   const [statusFilter, setStatusFilter] = useState<"All" | MaintenanceTicket["status"]>("All");
-  const [previewPhoto, setPreviewPhoto] = useState<StoredPhoto | null>(null);
+  const [galleryTicket, setGalleryTicket] = useState<{
+    ticketNo: string;
+    title: string;
+    photos: StoredPhoto[];
+    activeIdx: number;
+  } | null>(null);
+  const [loadingTicketId, setLoadingTicketId] = useState<string | null>(null);
+  const [photoCache, setPhotoCache] = useState<Record<string, StoredPhoto[]>>({});
   const [actionError, setActionError] = useState<string | null>(null);
+
+  const openTicketPhotos = async (t: MaintenanceTicket) => {
+    const cached = photoCache[t.id];
+    if (cached && cached.length > 0) {
+      setGalleryTicket({ ticketNo: t.ticketNo, title: t.title, photos: cached, activeIdx: 0 });
+      return;
+    }
+    const inline = getInlinePhotos(t.photos);
+    if (inline.length > 0) {
+      setPhotoCache((prev) => ({ ...prev, [t.id]: inline }));
+      setGalleryTicket({ ticketNo: t.ticketNo, title: t.title, photos: inline, activeIdx: 0 });
+      return;
+    }
+    setLoadingTicketId(t.id);
+    setActionError(null);
+    try {
+      const res = await fetch(`/api/tickets/${encodeURIComponent(t.id)}/photos`, {
+        cache: "no-store",
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok) {
+        setActionError(data?.message || "Could not load ticket photos.");
+        return;
+      }
+      const loaded = getInlinePhotos(data?.photos);
+      if (loaded.length === 0) {
+        setActionError("No valid image data found for this ticket.");
+        return;
+      }
+      setPhotoCache((prev) => ({ ...prev, [t.id]: loaded }));
+      setGalleryTicket({ ticketNo: t.ticketNo, title: t.title, photos: loaded, activeIdx: 0 });
+    } catch {
+      setActionError("Network error loading ticket photos.");
+    } finally {
+      setLoadingTicketId(null);
+    }
+  };
 
   const handleStatusChange = async (ticketId: string, nextStatus: MaintenanceTicket["status"]) => {
     setActionError(null);
@@ -224,19 +282,22 @@ function MaintenanceContent() {
                   {t.subCategory ? ` › ${t.subCategory}` : ""} · {t.location}
                 </div>
               )}
-              {getStoredPhotos(t.photos).length > 0 && (
-                <div className="flex items-center gap-2 overflow-x-auto py-1">
-                  {getStoredPhotos(t.photos).map((ph) => (
-                    <button
-                      key={ph.id}
-                      type="button"
-                      onClick={() => setPreviewPhoto(ph)}
-                      className="w-12 h-12 rounded-lg overflow-hidden border border-[#E5D9BF] shrink-0 cursor-pointer"
-                    >
-                      <img src={ph.dataUrl} alt={ph.name} className="w-full h-full object-cover" />
-                    </button>
-                  ))}
-                </div>
+              {getTicketPhotoCount(t) > 0 && (
+                <button
+                  type="button"
+                  disabled={loadingTicketId === t.id}
+                  onClick={() => void openTicketPhotos(t)}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#FAF5EB] border border-[#E5D9BF] text-[#0B2A5B] text-[12px] font-bold cursor-pointer hover:bg-[#FEF5DD]/60"
+                >
+                  {loadingTicketId === t.id ? (
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  ) : (
+                    <ImageIcon className="w-3.5 h-3.5 text-[#C9971C]" />
+                  )}
+                  <span>
+                    View {getTicketPhotoCount(t)} photo{getTicketPhotoCount(t) > 1 ? "s" : ""}
+                  </span>
+                </button>
               )}
               <div className="flex items-center justify-between pt-1.5 border-t border-[#F1ECE1] text-[12.5px]">
                 <span className="notranslate font-bold text-[#0B2A5B]">
@@ -308,31 +369,23 @@ function MaintenanceContent() {
                                 ? `${t.quotations.length} quotation(s)`
                                 : "—")}
                           </div>
-                          {getStoredPhotos(t.photos).length > 0 && (
-                            <div className="flex items-center gap-1.5 flex-wrap">
-                              {getStoredPhotos(t.photos)
-                                .slice(0, 3)
-                                .map((ph) => (
-                                  <button
-                                    key={ph.id}
-                                    type="button"
-                                    onClick={() => setPreviewPhoto(ph)}
-                                    title={ph.name}
-                                    className="w-9 h-9 rounded-lg overflow-hidden border border-[#E5D9BF] hover:border-[#0B2A5B] cursor-pointer shrink-0"
-                                  >
-                                    <img
-                                      src={ph.dataUrl}
-                                      alt={ph.name}
-                                      className="w-full h-full object-cover"
-                                    />
-                                  </button>
-                                ))}
-                              {getStoredPhotos(t.photos).length > 3 && (
-                                <span className="text-[11px] font-bold text-[#0B2A5B] inline-flex items-center gap-0.5">
-                                  <ImageIcon className="w-3 h-3" />+{getStoredPhotos(t.photos).length - 3}
-                                </span>
+                          {getTicketPhotoCount(t) > 0 && (
+                            <button
+                              type="button"
+                              disabled={loadingTicketId === t.id}
+                              onClick={() => void openTicketPhotos(t)}
+                              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-[#FAF5EB] border border-[#E5D9BF] hover:border-[#0B2A5B] text-[#0B2A5B] text-[11.5px] font-bold cursor-pointer"
+                            >
+                              {loadingTicketId === t.id ? (
+                                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                              ) : (
+                                <ImageIcon className="w-3.5 h-3.5 text-[#C9971C]" />
                               )}
-                            </div>
+                              <span>
+                                View {getTicketPhotoCount(t)} photo
+                                {getTicketPhotoCount(t) > 1 ? "s" : ""}
+                              </span>
+                            </button>
                           )}
                         </div>
                       </td>
@@ -381,9 +434,9 @@ function MaintenanceContent() {
         </div>
       </div>
 
-      {previewPhoto && (
+      {galleryTicket && galleryTicket.photos[galleryTicket.activeIdx] && (
         <div
-          onClick={() => setPreviewPhoto(null)}
+          onClick={() => setGalleryTicket(null)}
           className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4"
         >
           <div
@@ -393,29 +446,48 @@ function MaintenanceContent() {
             <div className="px-4 py-3 border-b border-[#EFE4CC] flex items-center justify-between gap-2">
               <div className="min-w-0">
                 <div className="font-bold text-[#0B2A5B] text-[14px] truncate">
-                  {previewPhoto.name}
+                  {galleryTicket.ticketNo} · {galleryTicket.photos[galleryTicket.activeIdx].name}
                 </div>
-                {previewPhoto.sizeKb ? (
-                  <div className="text-[11.5px] text-[#5B6474]">
-                    {previewPhoto.sizeKb} KB (compressed in DB)
-                  </div>
-                ) : null}
+                <div className="text-[11.5px] text-[#5B6474]">
+                  Photo {galleryTicket.activeIdx + 1} of {galleryTicket.photos.length}
+                  {galleryTicket.photos[galleryTicket.activeIdx].sizeKb
+                    ? ` · ${galleryTicket.photos[galleryTicket.activeIdx].sizeKb} KB (compressed in DB)`
+                    : ""}
+                </div>
               </div>
               <button
                 type="button"
-                onClick={() => setPreviewPhoto(null)}
+                onClick={() => setGalleryTicket(null)}
                 className="w-8 h-8 rounded-full bg-[#FAF5EB] text-[#0B2A5B] flex items-center justify-center cursor-pointer"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
-            <div className="bg-[#0B1220] flex items-center justify-center max-h-[75vh] overflow-auto">
+            <div className="bg-[#0B1220] flex items-center justify-center max-h-[68vh] overflow-auto">
               <img
-                src={previewPhoto.dataUrl}
-                alt={previewPhoto.name}
-                className="max-w-full max-h-[75vh] object-contain"
+                src={galleryTicket.photos[galleryTicket.activeIdx].dataUrl}
+                alt={galleryTicket.photos[galleryTicket.activeIdx].name}
+                className="max-w-full max-h-[68vh] object-contain"
               />
             </div>
+            {galleryTicket.photos.length > 1 && (
+              <div className="p-3 bg-[#FAF7F2] border-t border-[#EFE4CC] flex items-center gap-2 overflow-x-auto">
+                {galleryTicket.photos.map((ph, idx) => (
+                  <button
+                    key={ph.id}
+                    type="button"
+                    onClick={() =>
+                      setGalleryTicket((prev) => (prev ? { ...prev, activeIdx: idx } : null))
+                    }
+                    className={`w-14 h-14 rounded-lg overflow-hidden border-2 shrink-0 cursor-pointer ${
+                      idx === galleryTicket.activeIdx ? "border-[#0B2A5B]" : "border-transparent opacity-75"
+                    }`}
+                  >
+                    <img src={ph.dataUrl} alt={ph.name} className="w-full h-full object-cover" />
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       )}

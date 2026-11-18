@@ -72,6 +72,14 @@ export interface BookingRecord {
   postInspectionDone?: boolean;
   depositStatus?: "Held" | "Awaiting inspection" | "Ready to Refund" | "Refunded" | "N/A";
   cancellationReason?: string;
+  electricityRatePerUnit?: number;
+  electricityWaived?: boolean;
+  meterOpeningUnit?: number;
+  meterOpeningAt?: string;
+  meterOpeningBy?: string;
+  meterClosingUnit?: number;
+  meterClosingAt?: string;
+  meterClosingBy?: string;
 }
 
 export interface ApplicantRecord {
@@ -148,8 +156,9 @@ export interface MaintenanceQuotation {
 export interface StoredPhoto {
   id: string;
   name: string;
-  dataUrl: string;
+  dataUrl?: string;
   sizeKb?: number;
+  hasImage?: boolean;
 }
 
 export interface MaintenanceTicket {
@@ -175,6 +184,7 @@ export interface MaintenanceTicket {
   attachmentsLabel?: string;
   quotations?: MaintenanceQuotation[];
   photos?: Array<string | StoredPhoto>;
+  photoCount?: number;
   blockHall?: boolean;
   blockDateISO?: string;
   blockFrom?: string;

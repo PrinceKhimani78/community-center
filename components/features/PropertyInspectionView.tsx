@@ -11,6 +11,7 @@ import {
   Loader2,
   Trash2,
   X,
+  Zap,
 } from "lucide-react";
 import { useDashboard } from "@/lib/context/DashboardContext";
 import type { HallCheckItem } from "@/lib/mock/dashboard";
@@ -38,11 +39,14 @@ export default function PropertyInspectionView({
   initialBookingId = "",
 }: PropertyInspectionViewProps) {
   const {
+    isHydrated,
     bookings,
+    systemSettings,
     hallCheckMode,
     setHallCheckMode,
     hallCheckItems: templateItems,
     saveInspectionToDepositRefund,
+    updateBookingMeter,
   } = useDashboard();
 
   const activeBookings = useMemo(
@@ -82,6 +86,20 @@ export default function PropertyInspectionView({
   );
   const [loadingChecklist, setLoadingChecklist] = useState(false);
 
+  // Electricity meter state (per booking)
+  const [openingUnitInput, setOpeningUnitInput] = useState<string>("");
+  const [closingUnitInput, setClosingUnitInput] = useState<string>("");
+  const [electricityRateInput, setElectricityRateInput] = useState<number>(
+    systemSettings.electricityRatePerUnit ?? 12
+  );
+  const [electricityWaivedInput, setElectricityWaivedInput] = useState<boolean>(false);
+  const [lastMeterHint, setLastMeterHint] = useState<{
+    bookingReceiptNo: string;
+    closingUnit: number;
+  } | null>(null);
+  const [savingMeter, setSavingMeter] = useState(false);
+  const [meterNotice, setMeterNotice] = useState<string | null>(null);
+
   const [uploadedPhotos, setUploadedPhotos] = useState<InspectionPhoto[]>([]);
   const [loadingPhotos, setLoadingPhotos] = useState(false);
   const [compressing, setCompressing] = useState(false);
@@ -96,9 +114,43 @@ export default function PropertyInspectionView({
 
   const patchTimersRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
 
-  // Fetch per-booking checklist AND photos from MariaDB whenever booking changes
+  // Sync meter inputs whenever active booking changes
   useEffect(() => {
-    if (!booking?.receiptNo) return;
+    if (!booking) return;
+    setOpeningUnitInput(
+      booking.meterOpeningUnit !== undefined ? String(booking.meterOpeningUnit) : ""
+    );
+    setClosingUnitInput(
+      booking.meterClosingUnit !== undefined ? String(booking.meterClosingUnit) : ""
+    );
+    setElectricityRateInput(
+      booking.electricityRatePerUnit ?? systemSettings.electricityRatePerUnit ?? 12
+    );
+    setElectricityWaivedInput(Boolean(booking.electricityWaived));
+    setMeterNotice(null);
+  }, [
+    booking?.receiptNo,
+    booking?.meterOpeningUnit,
+    booking?.meterClosingUnit,
+    booking?.electricityRatePerUnit,
+    booking?.electricityWaived,
+    systemSettings.electricityRatePerUnit,
+  ]);
+
+  // Fetch last closing meter reading once after hydration (helpful sanity hint)
+  useEffect(() => {
+    if (!isHydrated) return;
+    fetch("/api/inspections/meter/last", { cache: "no-store" })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (data?.lastReading) setLastMeterHint(data.lastReading);
+      })
+      .catch(() => {});
+  }, [isHydrated]);
+
+  // Fetch per-booking checklist AND photos from MariaDB ONLY after bootstrap hydrates (prevents 404 noise on mock "1048")
+  useEffect(() => {
+    if (!isHydrated || !booking?.receiptNo) return;
     let cancelled = false;
     setLoadingChecklist(true);
     setLoadingPhotos(true);
@@ -139,7 +191,7 @@ export default function PropertyInspectionView({
     return () => {
       cancelled = true;
     };
-  }, [booking?.receiptNo]);
+  }, [isHydrated, booking?.receiptNo]);
 
   const persistChecklistItem = (
     receiptNo: string,
@@ -201,8 +253,61 @@ export default function PropertyInspectionView({
 
   const okCount = checkItems.filter((i) => i.status === "OK").length;
   const issueItems = checkItems.filter((i) => i.status === "Issue");
-  const totalDeduction = issueItems.reduce((sum, i) => sum + Math.max(0, i.issueCost || 0), 0);
+  const checklistDeduction = issueItems.reduce((sum, i) => sum + Math.max(0, i.issueCost || 0), 0);
+
+  const parsedOpening = openingUnitInput.trim() !== "" ? Number(openingUnitInput) : null;
+  const parsedClosing = closingUnitInput.trim() !== "" ? Number(closingUnitInput) : null;
+  const hasValidMeterPair =
+    parsedOpening !== null &&
+    parsedClosing !== null &&
+    Number.isFinite(parsedOpening) &&
+    Number.isFinite(parsedClosing) &&
+    parsedOpening >= 0 &&
+    parsedClosing >= parsedOpening;
+  const meterUnitsUsed = hasValidMeterPair
+    ? Number((parsedClosing - parsedOpening).toFixed(2))
+    : null;
+  const meterInvalidOrder =
+    parsedOpening !== null &&
+    parsedClosing !== null &&
+    Number.isFinite(parsedOpening) &&
+    Number.isFinite(parsedClosing) &&
+    parsedClosing < parsedOpening;
+  const electricityCharge =
+    !electricityWaivedInput && meterUnitsUsed !== null
+      ? Math.round(meterUnitsUsed * Math.max(0, Number(electricityRateInput || 0)))
+      : 0;
+
+  const totalDeduction = checklistDeduction + electricityCharge;
   const exceedsHeldDeposit = booking ? totalDeduction > booking.deposit : false;
+
+  const handleSaveMeter = async () => {
+    if (!booking) return;
+    setSaveError(null);
+    setMeterNotice(null);
+    if (meterInvalidOrder) {
+      setSaveError("Closing meter reading cannot be less than Opening meter reading.");
+      return;
+    }
+    setSavingMeter(true);
+    try {
+      const res = await updateBookingMeter(booking.receiptNo, {
+        openingUnit: parsedOpening !== null && Number.isFinite(parsedOpening) ? parsedOpening : undefined,
+        closingUnit: parsedClosing !== null && Number.isFinite(parsedClosing) ? parsedClosing : undefined,
+        electricityRatePerUnit: Math.max(0, Number(electricityRateInput || 0)),
+        electricityWaived: electricityWaivedInput,
+      });
+      setMeterNotice(
+        res.unitsConsumed !== null
+          ? `Meter saved: ${res.unitsConsumed} units × ₹${electricityRateInput}/unit = ₹${res.electricityCharge.toLocaleString("en-IN")}.`
+          : `Opening meter reading saved (${parsedOpening} kWh).`
+      );
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : "Could not save meter reading.");
+    } finally {
+      setSavingMeter(false);
+    }
+  };
 
   const beforePhotos = useMemo(
     () => uploadedPhotos.filter((p) => p.mode === "Before Event"),
@@ -296,6 +401,11 @@ export default function PropertyInspectionView({
     setSaveError(null);
     setSavedToRefund(false);
 
+    if (meterInvalidOrder) {
+      setSaveError("Closing meter reading cannot be less than Opening meter reading.");
+      return;
+    }
+
     if (hallCheckMode === "After Event" && totalDeduction > booking.deposit) {
       setSaveError(
         `Total deduction (₹${totalDeduction.toLocaleString("en-IN")}) cannot exceed held security deposit (₹${booking.deposit.toLocaleString("en-IN")}).`
@@ -305,6 +415,16 @@ export default function PropertyInspectionView({
 
     setSavingInspection(true);
     try {
+      if (parsedOpening !== null || parsedClosing !== null) {
+        await updateBookingMeter(booking.receiptNo, {
+          openingUnit:
+            parsedOpening !== null && Number.isFinite(parsedOpening) ? parsedOpening : undefined,
+          closingUnit:
+            parsedClosing !== null && Number.isFinite(parsedClosing) ? parsedClosing : undefined,
+          electricityRatePerUnit: Math.max(0, Number(electricityRateInput || 0)),
+          electricityWaived: electricityWaivedInput,
+        });
+      }
       await saveInspectionToDepositRefund(booking.receiptNo, hallCheckMode, checkItems);
       setSavedToRefund(true);
     } catch (err) {
@@ -571,10 +691,10 @@ export default function PropertyInspectionView({
                 </div>
               </div>
 
-              {hallCheckMode === "After Event" && issueItems.length > 0 && (
+              {hallCheckMode === "After Event" && (
                 <div>
                   <label className="block text-[11.5px] font-semibold text-[#5B6474] mb-1">
-                    Tag photo to flagged issue (optional)
+                    Tag photo to item (optional)
                   </label>
                   <select
                     value={photoTagItemId}
@@ -582,6 +702,7 @@ export default function PropertyInspectionView({
                     className="w-full h-9 rounded-lg border border-[#EFE4CC] bg-[#FAF7F2] px-2.5 text-[12.5px] font-semibold text-[#0B2A5B]"
                   >
                     <option value="">General post-event photo</option>
+                    <option value="meter-closing">Electricity Meter (Closing)</option>
                     {issueItems.map((iss) => (
                       <option key={iss.id} value={iss.id}>
                         {iss.label}
@@ -753,15 +874,131 @@ export default function PropertyInspectionView({
               )}
             </section>
 
+            {/* Electricity Meter — Opening & Closing Units (Event-Day Billing) */}
+            <section className="bg-white rounded-2xl border border-[#EFE4CC] p-5 space-y-3.5 shadow-2xs">
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <Zap className="w-4 h-4 text-[#C9971C]" />
+                  <h3 style={{ color: "#0B2A5B", fontSize: "16px", fontWeight: 700 }}>
+                    Electricity Meter
+                  </h3>
+                </div>
+                <label className="inline-flex items-center gap-1.5 text-[11.5px] font-semibold text-[#5B6474] cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={electricityWaivedInput}
+                    onChange={(e) => setElectricityWaivedInput(e.target.checked)}
+                    className="w-3.5 h-3.5 accent-[#0B2A5B]"
+                  />
+                  <span>Waive Bill</span>
+                </label>
+              </div>
+
+              {lastMeterHint && lastMeterHint.bookingReceiptNo !== booking.receiptNo && (
+                <p className="text-[11.5px] text-[#5B6474]">
+                  Last recorded meter closing:{" "}
+                  <strong className="text-[#0B2A5B]">{lastMeterHint.closingUnit} kWh</strong> (Booking #
+                  {lastMeterHint.bookingReceiptNo})
+                </p>
+              )}
+
+              <div className="grid grid-cols-3 gap-2.5">
+                <div>
+                  <label className="block text-[11px] font-semibold text-[#5B6474] mb-1">
+                    Opening Unit
+                  </label>
+                  <input
+                    type="number"
+                    min={0}
+                    step="0.1"
+                    value={openingUnitInput}
+                    onChange={(e) => {
+                      setOpeningUnitInput(e.target.value);
+                      setMeterNotice(null);
+                    }}
+                    placeholder="e.g. 14250"
+                    className="w-full h-9 rounded-lg border border-[#E5D9BF] bg-[#FAF7F2] px-2.5 text-[13px] font-bold text-[#0B2A5B]"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-semibold text-[#5B6474] mb-1">
+                    Closing Unit
+                  </label>
+                  <input
+                    type="number"
+                    min={0}
+                    step="0.1"
+                    value={closingUnitInput}
+                    onChange={(e) => {
+                      setClosingUnitInput(e.target.value);
+                      setMeterNotice(null);
+                    }}
+                    placeholder="e.g. 14435"
+                    className="w-full h-9 rounded-lg border border-[#E5D9BF] bg-[#FAF7F2] px-2.5 text-[13px] font-bold text-[#0B2A5B]"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-semibold text-[#5B6474] mb-1">
+                    Rate (₹/unit)
+                  </label>
+                  <input
+                    type="number"
+                    min={0}
+                    step="0.5"
+                    value={electricityRateInput}
+                    onChange={(e) => {
+                      setElectricityRateInput(Math.max(0, Number(e.target.value || 0)));
+                      setMeterNotice(null);
+                    }}
+                    className="w-full h-9 rounded-lg border border-[#E5D9BF] bg-[#FAF7F2] px-2.5 text-[13px] font-bold text-[#0B2A5B]"
+                  />
+                </div>
+              </div>
+
+              {meterInvalidOrder && (
+                <p className="text-[12px] font-semibold text-[#C62828]">
+                  Closing unit must be greater than or equal to Opening unit.
+                </p>
+              )}
+
+              {hasValidMeterPair && (
+                <div className="px-3 py-2 rounded-xl bg-[#FAF5EB] border border-[#EFE4CC] flex items-center justify-between text-[12.5px]">
+                  <span className="text-[#5B6474]">
+                    Used:{" "}
+                    <strong className="text-[#0B2A5B]">{meterUnitsUsed} units</strong>
+                    {electricityWaivedInput ? " (Waived)" : ` × ₹${electricityRateInput}`}
+                  </span>
+                  <span className="notranslate font-extrabold text-[#0B2A5B]">
+                    ₹{electricityCharge.toLocaleString("en-IN")}
+                  </span>
+                </div>
+              )}
+
+              {meterNotice && (
+                <div className="px-3 py-2 rounded-xl bg-emerald-50 border border-emerald-200 text-[#15803D] text-[12px] font-semibold">
+                  {meterNotice}
+                </div>
+              )}
+
+              <button
+                type="button"
+                disabled={savingMeter || meterInvalidOrder || (parsedOpening === null && parsedClosing === null)}
+                onClick={() => void handleSaveMeter()}
+                className="w-full h-9 rounded-xl bg-[#FAF5EB] border border-[#E2B544] text-[#0B2A5B] text-[12.5px] font-bold cursor-pointer hover:bg-[#FEF5DD]/70 disabled:opacity-50"
+              >
+                {savingMeter ? "Saving Meter..." : "Save Meter Reading"}
+              </button>
+            </section>
+
             {/* Damage Records & Cost Estimate */}
             <section className="bg-white rounded-2xl border border-[#EFE4CC] p-5 space-y-4 shadow-2xs">
               <h3 style={{ color: "#0B2A5B", fontSize: "16px", fontWeight: 700 }}>
-                Damage Records & Cost Estimate
+                Damage &amp; Electricity Deductions
               </h3>
 
-              {issueItems.length === 0 ? (
+              {issueItems.length === 0 && electricityCharge === 0 ? (
                 <p className="text-[13px] text-[#15803D] font-semibold">
-                  No damages flagged — ₹0 deduction.
+                  No damages or electricity charges — ₹0 deduction.
                 </p>
               ) : (
                 <div className="divide-y divide-[#F1ECE1]">
@@ -781,6 +1018,20 @@ export default function PropertyInspectionView({
                       </span>
                     </div>
                   ))}
+                  {electricityCharge > 0 && (
+                    <div className="py-2.5 flex items-start justify-between gap-3 text-[13.5px]">
+                      <div>
+                        <div className="font-bold text-[#0B2A5B]">Electricity Bill</div>
+                        <div className="text-[12px] text-[#5B6474]">
+                          {meterUnitsUsed} units @ ₹{electricityRateInput}/unit ({parsedOpening} →{" "}
+                          {parsedClosing})
+                        </div>
+                      </div>
+                      <span className="notranslate font-bold text-[#0B2A5B] shrink-0">
+                        ₹{electricityCharge.toLocaleString("en-IN")}
+                      </span>
+                    </div>
+                  )}
                 </div>
               )}
 

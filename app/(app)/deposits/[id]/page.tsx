@@ -87,6 +87,10 @@ function DepositRefundInner({ currentRefund }: { currentRefund: DepositRefundRec
   const [actionMsg, setActionMsg] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
 
+  const isRefunded = currentRefund.status === "Refunded";
+  const isSentForApproval = currentRefund.status === "Sent for Approval";
+  const isSubmitDisabled = isRefunded || (isSentForApproval && role !== "admin");
+
   const items: DepositDeductionItem[] = useMemo(
     () => currentRefund.deductionItems || [],
     [currentRefund.deductionItems]
@@ -334,19 +338,25 @@ function DepositRefundInner({ currentRefund }: { currentRefund: DepositRefundRec
             <section className="bg-white rounded-2xl border border-[#EFE4CC] p-5 space-y-4">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <h2 style={{ color: "#0B2A5B", fontSize: "16.5px", fontWeight: 700 }}>
-                  Damage Deductions
+                  Damage &amp; Utility Deductions
                 </h2>
-                <button
-                  type="button"
-                  onClick={() => setShowAddDeduction((v) => !v)}
-                  className="px-3.5 py-1.5 rounded-xl bg-white border border-[#0B2A5B]/30 text-[#0B2A5B] text-[12.5px] font-bold inline-flex items-center gap-1 cursor-pointer"
-                >
-                  <Plus className="w-3.5 h-3.5" />
-                  <span>Add deduction</span>
-                </button>
+                {!isRefunded ? (
+                  <button
+                    type="button"
+                    onClick={() => setShowAddDeduction((v) => !v)}
+                    className="px-3.5 py-1.5 rounded-xl bg-white border border-[#0B2A5B]/30 text-[#0B2A5B] text-[12.5px] font-bold inline-flex items-center gap-1 cursor-pointer"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>Add deduction</span>
+                  </button>
+                ) : (
+                  <span className="px-2.5 py-1 rounded-full bg-emerald-50 border border-emerald-200 text-[#15803D] text-[11.5px] font-bold">
+                    Settled &amp; Locked
+                  </span>
+                )}
               </div>
 
-              {showAddDeduction && (
+              {showAddDeduction && !isRefunded && (
                 <form
                   onSubmit={handleAddDeduction}
                   className="p-4 rounded-xl bg-[#FAF7F2] border border-[#E2B544] grid grid-cols-1 sm:grid-cols-4 gap-2.5 items-end"
@@ -442,14 +452,16 @@ function DepositRefundInner({ currentRefund }: { currentRefund: DepositRefundRec
                             ₹{d.amount.toLocaleString("en-IN")}
                           </td>
                           <td className="py-3 pl-2 text-right">
-                            <button
-                              type="button"
-                              onClick={() => handleRemoveDeduction(d.id)}
-                              className="p-1 text-[#5B6474] hover:text-[#C62828] cursor-pointer"
-                              aria-label="Remove deduction"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
+                            {!isRefunded && (
+                              <button
+                                type="button"
+                                onClick={() => void handleRemoveDeduction(d.id)}
+                                className="p-1 text-[#5B6474] hover:text-[#C62828] cursor-pointer"
+                                aria-label="Remove deduction"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            )}
                           </td>
                         </tr>
                       ))
@@ -481,9 +493,10 @@ function DepositRefundInner({ currentRefund }: { currentRefund: DepositRefundRec
                   </label>
                   <select
                     value={refundMode}
+                    disabled={isRefunded}
                     onChange={(e) => setRefundMode(e.target.value as PaymentMode)}
                     style={{ minHeight: "42px" }}
-                    className="w-full rounded-xl border border-[#E5D9BF] bg-[#FAF7F2] px-3 text-[13.5px] font-semibold text-[#0B2A5B]"
+                    className="w-full rounded-xl border border-[#E5D9BF] bg-[#FAF7F2] px-3 text-[13.5px] font-semibold text-[#0B2A5B] disabled:opacity-60"
                   >
                     <option value="UPI">UPI</option>
                     <option value="Cash">Cash</option>
@@ -498,11 +511,12 @@ function DepositRefundInner({ currentRefund }: { currentRefund: DepositRefundRec
                   </label>
                   <input
                     type="text"
+                    disabled={isRefunded}
                     value={upiOrAccount}
                     onChange={(e) => setUpiOrAccount(e.target.value)}
                     placeholder="e.g. imranpatel@okaxis"
                     style={{ minHeight: "42px" }}
-                    className="w-full rounded-xl border border-[#E5D9BF] bg-[#FAF7F2] px-3.5 text-[13.5px]"
+                    className="w-full rounded-xl border border-[#E5D9BF] bg-[#FAF7F2] px-3.5 text-[13.5px] disabled:opacity-60"
                   />
                 </div>
               </div>
@@ -513,10 +527,11 @@ function DepositRefundInner({ currentRefund }: { currentRefund: DepositRefundRec
                 </label>
                 <textarea
                   rows={2}
+                  disabled={isRefunded}
                   value={remarks}
                   onChange={(e) => setRemarks(e.target.value)}
                   placeholder="Agreement notes with customer..."
-                  className="w-full rounded-xl border border-[#E5D9BF] bg-[#FAF7F2] p-3 text-[13.5px]"
+                  className="w-full rounded-xl border border-[#E5D9BF] bg-[#FAF7F2] p-3 text-[13.5px] disabled:opacity-60"
                 />
               </div>
             </section>
@@ -561,17 +576,22 @@ function DepositRefundInner({ currentRefund }: { currentRefund: DepositRefundRec
               <div className="space-y-2.5 pt-1">
                 <button
                   type="button"
-                  onClick={handleSubmitSettlement}
+                  disabled={isSubmitDisabled}
+                  onClick={() => void handleSubmitSettlement()}
                   style={{
                     minHeight: "46px",
-                    background: "linear-gradient(135deg, #F7E6A9 0%, #E2B544 55%, #C9971C 100%)",
-                    color: "#041535",
+                    background: isSubmitDisabled
+                      ? "rgba(255, 255, 255, 0.16)"
+                      : "linear-gradient(135deg, #F7E6A9 0%, #E2B544 55%, #C9971C 100%)",
+                    color: isSubmitDisabled ? "rgba(255, 255, 255, 0.78)" : "#041535",
                     borderRadius: "12px",
                   }}
-                  className="interactive-btn w-full text-[13.5px] font-bold cursor-pointer"
+                  className="interactive-btn w-full text-[13.5px] font-bold cursor-pointer disabled:cursor-not-allowed"
                 >
-                  {currentRefund.status === "Refunded"
-                    ? "Refund Completed"
+                  {isRefunded
+                    ? "Refund Completed (Locked)"
+                    : isSentForApproval && role !== "admin"
+                    ? "Waiting for Admin Approval"
                     : role === "admin"
                     ? "Approve & Mark Refunded"
                     : "Send for Approval"}

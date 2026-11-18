@@ -48,25 +48,22 @@ export default function NewMaintenanceRequestPage() {
 
   const [category, setCategory] = useState<MaintenanceTicket["category"]>("Electrical");
   const [subCategory, setSubCategory] = useState("Lighting");
-  const [priority, setPriority] = useState<"Low" | "Medium" | "High">("High");
+  const [priority, setPriority] = useState<"Low" | "Medium" | "High">("Medium");
   const [location, setLocation] = useState("Ground Floor");
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
 
-  const [estimatedCost, setEstimatedCost] = useState(5000);
-  const [quotations, setQuotations] = useState<MaintenanceQuotation[]>([
-    { id: "q-1", vendor: "Shree Electricals", fileName: "quotation.pdf", amount: 5000 },
-    { id: "q-2", vendor: "Patel Light House", fileName: "quote-photo.jpg", amount: 6200 },
-  ]);
+  const [estimatedCost, setEstimatedCost] = useState(0);
+  const [quotations, setQuotations] = useState<MaintenanceQuotation[]>([]);
   const [showAddQuote, setShowAddQuote] = useState(false);
   const [quoteVendor, setQuoteVendor] = useState("");
-  const [quoteAmount, setQuoteAmount] = useState(4500);
+  const [quoteAmount, setQuoteAmount] = useState(0);
 
   const [photos, setPhotos] = useState<StoredPhoto[]>([]);
   const [compressingPhotos, setCompressingPhotos] = useState(false);
   const [photoNotice, setPhotoNotice] = useState<string | null>(null);
 
-  const [blockHall, setBlockHall] = useState(true);
+  const [blockHall, setBlockHall] = useState(false);
   const [blockDateISO, setBlockDateISO] = useState(() => getTodayISO());
   const [blockFrom, setBlockFrom] = useState("9:00 AM");
   const [blockTo, setBlockTo] = useState("5:00 PM");
@@ -405,11 +402,21 @@ export default function NewMaintenanceRequestPage() {
                         <span className="notranslate font-bold text-[#0B2A5B]">
                           ₹{q.amount.toLocaleString("en-IN")}
                         </span>
-                        {isLowest && (
+                        {isLowest && quotations.length > 1 && (
                           <span className="px-2 py-0.5 rounded-full bg-[#DCFCE7] text-[#15803D] text-[11px] font-bold">
                             Lowest
                           </span>
                         )}
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setQuotations((prev) => prev.filter((item) => item.id !== q.id))
+                          }
+                          aria-label={`Remove quotation from ${q.vendor}`}
+                          className="p-1 text-[#C62828] hover:bg-red-50 rounded-lg cursor-pointer"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
                       </div>
                     </div>
                   );

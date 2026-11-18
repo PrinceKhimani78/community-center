@@ -242,15 +242,21 @@ export default function NewBookingForm({
 
   const selectedHallStatus = hallAvailability.find((h) => h.hall === hall);
 
+  const liveBaseRent = systemSettings.baseRentPerFloor ?? BASE_RENT_PER_FLOOR;
+  const liveAcSurcharge = systemSettings.acSurchargePerFloor ?? AC_SURCHARGE_PER_FLOOR;
+  const liveDefaultDeposit = systemSettings.defaultSecurityDeposit ?? DEFAULT_SECURITY_DEPOSIT;
+  const liveElectricityRate =
+    editBooking?.electricityRatePerUnit ?? systemSettings.electricityRatePerUnit ?? 12;
+
   const floorCount = getFloorCount(hall);
-  const fixedHallRent = floorCount * BASE_RENT_PER_FLOOR * Math.max(1, totalDays);
+  const fixedHallRent = floorCount * liveBaseRent * Math.max(1, totalDays);
   const fixedAcCharge = isAC
-    ? floorCount * AC_SURCHARGE_PER_FLOOR * Math.max(1, totalDays)
+    ? floorCount * liveAcSurcharge * Math.max(1, totalDays)
     : 0;
   const effectiveHallRent = isFreeUse ? Number(manualHallRent || 0) : fixedHallRent;
   const effectiveAcCharge = isFreeUse ? Number(manualAcCharge || 0) : fixedAcCharge;
   const effectiveRent = effectiveHallRent + effectiveAcCharge;
-  const effectiveDeposit = isFreeUse ? Number(manualDeposit || 0) : DEFAULT_SECURITY_DEPOSIT;
+  const effectiveDeposit = isFreeUse ? Number(manualDeposit || 0) : liveDefaultDeposit;
   const effectivePaid = Number(paid || 0);
   const totalCharge = effectiveRent + effectiveDeposit;
   const hasExcessAdvance = effectivePaid > totalCharge;
@@ -403,6 +409,8 @@ export default function NewBookingForm({
       isFreeUse,
       notes: notes.trim(),
       paymentMode,
+      electricityRatePerUnit: liveElectricityRate,
+      electricityWaived: isFreeUse,
     };
 
     setIsSubmitting(true);
@@ -620,7 +628,7 @@ export default function NewBookingForm({
                 className="w-4 h-4 accent-[#0B2A5B] rounded"
               />
               <span>
-                With A.C. (+₹{(floorCount * AC_SURCHARGE_PER_FLOOR).toLocaleString("en-IN")})
+                With A.C. (+₹{(floorCount * liveAcSurcharge).toLocaleString("en-IN")})
               </span>
             </label>
 
@@ -955,16 +963,18 @@ export default function NewBookingForm({
             ) : (
               <span>
                 {floorCount === 2 ? "Double floor" : "Single floor"} ₹
-                {(floorCount * BASE_RENT_PER_FLOOR).toLocaleString("en-IN")}
+                {(floorCount * liveBaseRent).toLocaleString("en-IN")}
                 {isAC
-                  ? ` + A.C. ₹${(floorCount * AC_SURCHARGE_PER_FLOOR).toLocaleString("en-IN")}`
+                  ? ` + A.C. ₹${(floorCount * liveAcSurcharge).toLocaleString("en-IN")}`
                   : " (Non-A.C.)"}
                 {totalDays > 1 ? ` × ${totalDays} days` : ""} + Deposit ₹
-                {DEFAULT_SECURITY_DEPOSIT.toLocaleString("en-IN")} ={" "}
+                {liveDefaultDeposit.toLocaleString("en-IN")} ={" "}
                 <strong className="text-[#0B2A5B]">
                   ₹{totalCharge.toLocaleString("en-IN")}
                 </strong>
-                . Check Free Community / Trustee Use above to edit manually.
+                . Electricity billed separately at{" "}
+                <strong className="text-[#0B2A5B]">₹{liveElectricityRate}/unit</strong> (opening &amp;
+                closing meter recorded on event day, deducted from deposit).
               </span>
             )}
           </div>

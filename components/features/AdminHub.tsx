@@ -266,7 +266,7 @@ function SettingsEditor({
             <h2>Hall Pricing &amp; Booking Governance</h2>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
             <div>
               <label className="block text-[12px] font-semibold text-[#5B6474] mb-1">
                 Base Hall Rent / Floor (₹)
@@ -316,6 +316,25 @@ function SettingsEditor({
                   setDraft((p) => ({
                     ...p,
                     defaultSecurityDeposit: Math.max(0, Number(e.target.value) || 0),
+                  }));
+                }}
+                className="w-full h-10 px-3 rounded-xl border border-[#E5D9BF] bg-[#FAF7F2] text-[13.5px] font-bold text-[#0B2A5B] focus:outline-none focus:ring-2 focus:ring-[#E2B544]"
+              />
+            </div>
+            <div>
+              <label className="block text-[12px] font-semibold text-[#5B6474] mb-1">
+                Electricity Rate (₹ / unit)
+              </label>
+              <input
+                type="number"
+                min={0}
+                step="0.5"
+                value={draft.electricityRatePerUnit ?? 12}
+                onChange={(e) => {
+                  setSavedNotice(false);
+                  setDraft((p) => ({
+                    ...p,
+                    electricityRatePerUnit: Math.max(0, Number(e.target.value) || 0),
                   }));
                 }}
                 className="w-full h-10 px-3 rounded-xl border border-[#E5D9BF] bg-[#FAF7F2] text-[13.5px] font-bold text-[#0B2A5B] focus:outline-none focus:ring-2 focus:ring-[#E2B544]"
